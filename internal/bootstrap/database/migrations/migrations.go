@@ -1004,3 +1004,34 @@ func ensureProductSoldCountBackfillV3Migration() error {
 		},
 	}).Error
 }
+
+const productSoldCountBackfillV4MigrationSettingKey = "migration/product_sold_count_backfill_v4"
+
+// ensureProductSoldCountBackfillV4Migration 口径改回「已售件数」（sold.2）：单事务清零并重算，只给计入订单写标记。
+// v1/v2/v3 标记保留不动。
+func ensureProductSoldCountBackfillV4Migration() error {
+	if gormdb.DB == nil {
+		return errors.New("database is not initialized")
+	}
+	var marker settingsstore.SettingRecord
+	if err := gormdb.DB.First(&marker, "key = ?", productSoldCountBackfillV4MigrationSettingKey).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	} else if migrationDone(marker.ValueJSON) {
+		return nil
+	}
+	counted, err := gormutil.RebuildOrderSoldCountV4(gormdb.DB)
+	if err != nil {
+		return err
+	}
+	logger.Infow("product_sold_count_backfill_v4_done", "orders_counted", counted)
+	return gormdb.DB.Save(&settingsstore.SettingRecord{
+		Key: productSoldCountBackfillV4MigrationSettingKey,
+		ValueJSON: jsonmap.JSON{
+			"done":           true,
+			"orders_counted": counted,
+			"migrated_at":    time.Now().UTC().Format(time.RFC3339),
+		},
+	}).Error
+}

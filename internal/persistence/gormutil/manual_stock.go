@@ -201,7 +201,7 @@ func RecordChildrenSoldCount(db *gorm.DB, parentID uint) error {
 	return RecordOrderSoldCount(db, ids...)
 }
 
-// CountOrderOnCreate 「下单 N 次」口径（v3）：叶子订单创建时在同一事务内 +1。
+// CountOrderOnCreate 「下单 N 次」口径（v3，自 v4 起已停用，不再被调用，保留仅供参考）：叶子订单创建时在同一事务内 +1。
 // 一笔订单对每个商品只计 1 次（同一商品多行明细去重），不按件数；有子单的父单不计；
 // 以 sales_counted_at 认领保证幂等，之后任何状态变化都不再计数、也不扣减。
 func CountOrderOnCreate(db *gorm.DB, orderID uint) error {
@@ -243,4 +243,10 @@ func RebuildOrderCountV3(db *gorm.DB) (int, error) {
 		return res.Error
 	})
 	return int(marked), err
+}
+
+// RebuildOrderSoldCountV4 回到 sold.2 的「已售件数」口径并全量重算：单事务内清零 sold_count、
+// 清空全部 sales_counted_at（包括 v3 给未付款订单写下的标记），再只给计入的订单写回标记。
+func RebuildOrderSoldCountV4(db *gorm.DB) (int, error) {
+	return RebuildOrderSoldCount(db)
 }

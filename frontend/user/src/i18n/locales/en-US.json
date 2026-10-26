@@ -174,7 +174,7 @@
       "manual": "Manual delivery",
       "auto": "Auto fulfillment"
     },
-    "soldCount": "Ordered {count} times",
+    "soldCount": "{count} sold",
     "filter": "Filter",
     "closeFilter": "Close filter",
     "promotionRulesTitle": "Promotions",

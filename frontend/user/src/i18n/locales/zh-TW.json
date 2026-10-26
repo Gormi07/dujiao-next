@@ -174,7 +174,7 @@
       "manual": "人工交付",
       "auto": "自動交付"
     },
-    "soldCount": "下單 {count} 次",
+    "soldCount": "已售 {count}",
     "filter": "篩選",
     "closeFilter": "關閉篩選",
     "promotionRulesTitle": "促銷活動",
