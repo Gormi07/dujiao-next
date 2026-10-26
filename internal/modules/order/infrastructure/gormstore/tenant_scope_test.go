@@ -13,6 +13,8 @@ import (
 	userdomain "github.com/dujiao-next/internal/modules/identity/user/domain"
 
 	"github.com/dujiao-next/internal/constants"
+	productdomain "github.com/dujiao-next/internal/modules/catalog/product/domain"
+	"github.com/dujiao-next/internal/persistence/gormutil"
 	"github.com/dujiao-next/internal/shared/jsonmap"
 	"github.com/dujiao-next/internal/shared/money"
 	"github.com/glebarez/sqlite"
@@ -274,5 +276,162 @@ func TestOrderStoreExcludesSoftDeletedAggregatesAndAssociations(t *testing.T) {
 	}
 	if got.Fulfillment != nil {
 		t.Fatalf("soft-deleted fulfillment must not preload, got %+v", got.Fulfillment)
+	}
+}
+
+func openSoldCountTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	dsn := fmt.Sprintf("file:sold_count_%d?mode=memory&cache=shared", time.Now().UnixNano())
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite failed: %v", err)
+	}
+	if err := db.AutoMigrate(&userdomain.User{}, &orderdomain.Order{}, &orderdomain.OrderItem{}, &fulfillmentdomain.Fulfillment{}, &productdomain.Product{}); err != nil {
+		t.Fatalf("migrate failed: %v", err)
+	}
+	return db
+}
+
+func seedSoldProduct(t *testing.T, db *gorm.DB, slug string) productdomain.Product {
+	t.Helper()
+	p := productdomain.Product{Slug: slug, TitleJSON: jsonmap.JSON{"zh-CN": slug}, CategoryID: 1}
+	if err := db.Create(&p).Error; err != nil {
+		t.Fatalf("create product: %v", err)
+	}
+	return p
+}
+
+func seedSoldOrder(t *testing.T, db *gorm.DB, no string, status string, parentID *uint, items map[uint]int) orderdomain.Order {
+	t.Helper()
+	o := seedScopedOrder(t, db, no, 0, "g@example.com", "x", status, nil, parentID)
+	for pid, qty := range items {
+		it := orderdomain.OrderItem{OrderID: o.ID, ProductID: pid, Quantity: qty, TitleJSON: jsonmap.JSON{"zh-CN": "t"}, FulfillmentType: constants.FulfillmentTypeAuto}
+		if err := db.Create(&it).Error; err != nil {
+			t.Fatalf("create item: %v", err)
+		}
+	}
+	return o
+}
+
+func soldCountOf(t *testing.T, db *gorm.DB, id uint) int64 {
+	t.Helper()
+	var p productdomain.Product
+	if err := db.First(&p, id).Error; err != nil {
+		t.Fatalf("load product: %v", err)
+	}
+	return p.SoldCount
+}
+
+func TestSoldCount_DeliveredThenCompletedCountsOnce(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	p := seedSoldProduct(t, db, "p1")
+	o := seedSoldOrder(t, db, "O1", constants.OrderStatusPaid, nil, map[uint]int{p.ID: 3})
+
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusDelivered, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 3 {
+		t.Fatalf("after delivered want 3, got %d", got)
+	}
+	if err := store.UpdateFields(o.ID, map[string]interface{}{"status": constants.OrderStatusCompleted}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusCompleted, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 3 {
+		t.Fatalf("completed after delivered must not recount, want 3 got %d", got)
+	}
+}
+
+func TestSoldCount_NonDeliveredStatusesDoNotCount(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	p := seedSoldProduct(t, db, "p2")
+	o := seedSoldOrder(t, db, "O2", constants.OrderStatusPendingPayment, nil, map[uint]int{p.ID: 2})
+	for _, s := range []string{constants.OrderStatusPaid, constants.OrderStatusFulfilling, constants.OrderStatusCanceled} {
+		if err := store.UpdateStatus(o.ID, s, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := soldCountOf(t, db, p.ID); got != 0 {
+		t.Fatalf("want 0, got %d", got)
+	}
+}
+
+func TestSoldCount_ParentAndChildrenCountedOnce(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	a := seedSoldProduct(t, db, "pa")
+	b := seedSoldProduct(t, db, "pb")
+	parent := seedSoldOrder(t, db, "P", constants.OrderStatusPaid, nil, map[uint]int{a.ID: 2, b.ID: 1})
+	c1 := seedSoldOrder(t, db, "P-1", constants.OrderStatusPaid, &parent.ID, map[uint]int{a.ID: 2})
+	seedSoldOrder(t, db, "P-2", constants.OrderStatusPaid, &parent.ID, map[uint]int{b.ID: 1})
+
+	if err := store.UpdateStatus(c1.ID, constants.OrderStatusDelivered, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateChildrenStatus(parent.ID, constants.OrderStatusCompleted, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(parent.ID, constants.OrderStatusCompleted, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, a.ID); got != 2 {
+		t.Fatalf("product a want 2, got %d", got)
+	}
+	if got := soldCountOf(t, db, b.ID); got != 1 {
+		t.Fatalf("product b want 1, got %d", got)
+	}
+}
+
+func TestSoldCount_RefundDoesNotDecrease(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	p := seedSoldProduct(t, db, "p3")
+	o := seedSoldOrder(t, db, "O3", constants.OrderStatusPaid, nil, map[uint]int{p.ID: 5})
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusCompleted, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusRefunded, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 5 {
+		t.Fatalf("want 5, got %d", got)
+	}
+}
+
+func TestSoldCountBackfill_CountsHistoricalDeliveredOnceAndSkipsParents(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	a := seedSoldProduct(t, db, "ba")
+	b := seedSoldProduct(t, db, "bb")
+	// 无子单的已完成订单：计入 2
+	seedSoldOrder(t, db, "H1", constants.OrderStatusCompleted, nil, map[uint]int{a.ID: 2})
+	// 父单（有子单）不计，子单已发货计入 1
+	parent := seedSoldOrder(t, db, "H2", constants.OrderStatusDelivered, nil, map[uint]int{a.ID: 1, b.ID: 4})
+	seedSoldOrder(t, db, "H2-1", constants.OrderStatusDelivered, &parent.ID, map[uint]int{a.ID: 1})
+	seedSoldOrder(t, db, "H2-2", constants.OrderStatusPaid, &parent.ID, map[uint]int{b.ID: 4})
+	// 退款但有交付记录：计入 3
+	refunded := seedSoldOrder(t, db, "H3", constants.OrderStatusRefunded, nil, map[uint]int{b.ID: 3})
+	now := time.Now()
+	if err := db.Create(&fulfillmentdomain.Fulfillment{OrderID: refunded.ID, Type: constants.FulfillmentTypeAuto, Status: constants.FulfillmentStatusDelivered, DeliveredAt: &now}).Error; err != nil {
+		t.Fatal(err)
+	}
+	// 退款且无交付记录：不计
+	seedSoldOrder(t, db, "H4", constants.OrderStatusRefunded, nil, map[uint]int{b.ID: 7})
+	// 已取消：不计
+	seedSoldOrder(t, db, "H5", constants.OrderStatusCanceled, nil, map[uint]int{a.ID: 9})
+
+	for i := 0; i < 2; i++ { // 重复执行也不能重复累加
+		if _, err := gormutil.BackfillOrderSoldCount(db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := soldCountOf(t, db, a.ID); got != 3 {
+		t.Fatalf("product a want 3, got %d", got)
+	}
+	if got := soldCountOf(t, db, b.ID); got != 3 {
+		t.Fatalf("product b want 3, got %d", got)
 	}
 }

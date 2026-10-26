@@ -278,7 +278,7 @@ func (r *ProductStore) Create(product *productdomain.Product) error {
 // 而 SKU 删除是硬删除，级联 upsert 会把已删除的规格按原 ID 重新插回（issue #344）。
 // SKU 一律由 SKURepository 独占管理。
 func (r *ProductStore) Update(product *productdomain.Product) error {
-	return r.db.Omit(clause.Associations).Save(product).Error
+	return r.db.Omit(clause.Associations, "sold_count").Save(product).Error
 }
 
 // QuickUpdate 快速更新商品指定字段

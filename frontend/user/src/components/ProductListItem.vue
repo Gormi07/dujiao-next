@@ -49,6 +49,9 @@
         <Badge class="sm:hidden" size="xs" :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
           {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
         </Badge>
+        <Badge class="sm:hidden tabular-nums" size="xs" variant="neutral" data-testid="sold-count">
+          {{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}
+        </Badge>
         <Badge v-if="product.stock_status === 'out_of_stock' || product.stock_status === 'low_stock'"
           class="sm:hidden" size="xs" :variant="getStockBadgeVariant(product.stock_status)">
           {{ getStockStatusLabel(product) }}
@@ -60,6 +63,9 @@
         </Badge>
         <Badge class="hidden sm:inline-flex" size="xs" :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
           {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
+        </Badge>
+        <Badge class="hidden sm:inline-flex tabular-nums" size="xs" variant="neutral" data-testid="sold-count">
+          {{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}
         </Badge>
         <Badge class="hidden sm:inline-flex" size="xs" :variant="getStockBadgeVariant(product.stock_status)">
           {{ getStockStatusLabel(product) }}
@@ -116,6 +122,7 @@
 import { useI18n } from 'vue-i18n'
 import { ChevronRight, Image as ImageIcon, ShoppingCart } from 'lucide-vue-next'
 import { getFirstImageUrl, getImageUrl } from '../utils/image'
+import { normalizeSoldCount } from '../utils/soldCount'
 import { useLocalized, useProductLabels } from '../composables/useProduct'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

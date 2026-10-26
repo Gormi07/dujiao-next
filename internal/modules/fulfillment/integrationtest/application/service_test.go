@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	productdomain "github.com/dujiao-next/internal/modules/catalog/product/domain"
 	. "github.com/dujiao-next/internal/modules/fulfillment/application"
 	fulfillmentdomain "github.com/dujiao-next/internal/modules/fulfillment/domain"
 	fulfillmentgormstore "github.com/dujiao-next/internal/modules/fulfillment/infrastructure/gormstore"
@@ -35,6 +36,7 @@ func setupFulfillmentServiceTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&orderdomain.Order{},
 		&orderdomain.OrderItem{},
+		&productdomain.Product{},
 		&fulfillmentdomain.Fulfillment{},
 		&cardsecretdomain.Secret{},
 		&cardsecretdomain.Batch{},

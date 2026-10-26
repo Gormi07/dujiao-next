@@ -520,7 +520,15 @@ func (r *Store) UpdateStatus(id uint, status string, updates map[string]interfac
 		updates = map[string]interface{}{}
 	}
 	updates["status"] = status
-	return r.db.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error; err != nil {
+			return err
+		}
+		if gormutil.IsSoldCountStatus(status) {
+			return gormutil.RecordOrderSoldCount(tx, id)
+		}
+		return nil
+	})
 }
 
 // ListByUser 获取用户订单列表
@@ -792,7 +800,16 @@ func (r *Store) UpdateFields(id uint, updates map[string]interface{}) error {
 	if id == 0 || len(updates) == 0 {
 		return nil
 	}
-	return r.db.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error
+	status, _ := updates["status"].(string)
+	if !gormutil.IsSoldCountStatus(status) {
+		return r.db.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error; err != nil {
+			return err
+		}
+		return gormutil.RecordOrderSoldCount(tx, id)
+	})
 }
 
 // UpdateChildrenStatus 把所有非目标状态的子订单批量更新为 targetStatus,返回受影响行数。
@@ -801,13 +818,24 @@ func (r *Store) UpdateChildrenStatus(parentID uint, targetStatus string, now tim
 	if parentID == 0 || strings.TrimSpace(targetStatus) == "" {
 		return 0, nil
 	}
-	result := r.db.Model(&orderdomain.Order{}).
-		Where("orders.deleted_at IS NULL AND parent_id = ? AND status <> ?", parentID, targetStatus).
-		Updates(map[string]interface{}{
-			"status":     targetStatus,
-			"updated_at": now,
-		})
-	return result.RowsAffected, result.Error
+	var affected int64
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&orderdomain.Order{}).
+			Where("orders.deleted_at IS NULL AND parent_id = ? AND status <> ?", parentID, targetStatus).
+			Updates(map[string]interface{}{
+				"status":     targetStatus,
+				"updated_at": now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		affected = result.RowsAffected
+		if gormutil.IsSoldCountStatus(targetStatus) {
+			return gormutil.RecordChildrenSoldCount(tx, parentID)
+		}
+		return nil
+	})
+	return affected, err
 }
 
 // UpdateFieldsWhereWalletPaid 仅当订单 wallet_paid_amount > 0 时才更新指定字段,
