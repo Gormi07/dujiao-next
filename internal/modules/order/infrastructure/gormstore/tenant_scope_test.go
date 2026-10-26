@@ -345,18 +345,93 @@ func TestSoldCount_DeliveredThenCompletedCountsOnce(t *testing.T) {
 	}
 }
 
-func TestSoldCount_NonDeliveredStatusesDoNotCount(t *testing.T) {
+func TestSoldCount_PendingAndCanceledDoNotCount(t *testing.T) {
 	db := openSoldCountTestDB(t)
 	store := New(db, "test-guest-credential-secret-with-32-bytes")
 	p := seedSoldProduct(t, db, "p2")
 	o := seedSoldOrder(t, db, "O2", constants.OrderStatusPendingPayment, nil, map[uint]int{p.ID: 2})
-	for _, s := range []string{constants.OrderStatusPaid, constants.OrderStatusFulfilling, constants.OrderStatusCanceled} {
+	for _, s := range []string{constants.OrderStatusPendingPayment, constants.OrderStatusCanceled} {
 		if err := store.UpdateStatus(o.ID, s, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if got := soldCountOf(t, db, p.ID); got != 0 {
 		t.Fatalf("want 0, got %d", got)
+	}
+}
+
+func TestSoldCount_PaidCountsOnceThroughLifecycle(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	p := seedSoldProduct(t, db, "pl")
+	o := seedSoldOrder(t, db, "OL", constants.OrderStatusPendingPayment, nil, map[uint]int{p.ID: 4})
+	if got := soldCountOf(t, db, p.ID); got != 0 {
+		t.Fatalf("pending want 0, got %d", got)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusPaid, map[string]interface{}{"paid_at": time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 4 {
+		t.Fatalf("after paid want 4, got %d", got)
+	}
+	for _, s := range []string{constants.OrderStatusFulfilling, constants.OrderStatusPartiallyDelivered, constants.OrderStatusDelivered, constants.OrderStatusCompleted} {
+		if err := store.UpdateStatus(o.ID, s, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.UpdateFields(o.ID, map[string]interface{}{"status": s}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := soldCountOf(t, db, p.ID); got != 4 {
+		t.Fatalf("later statuses must not recount, want 4 got %d", got)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusRefunded, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 4 {
+		t.Fatalf("refund must not decrease, want 4 got %d", got)
+	}
+}
+
+func TestSoldCount_FulfillingDirectlyCountsAndManualCounts(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	p := seedSoldProduct(t, db, "pm")
+	o := seedSoldOrder(t, db, "OM", constants.OrderStatusPendingPayment, nil, nil)
+	if err := db.Create(&orderdomain.OrderItem{OrderID: o.ID, ProductID: p.ID, Quantity: 2, TitleJSON: jsonmap.JSON{"zh-CN": "t"}, FulfillmentType: constants.FulfillmentTypeManual}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateFields(o.ID, map[string]interface{}{"status": constants.OrderStatusFulfilling}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusDelivered, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 2 {
+		t.Fatalf("manual want 2, got %d", got)
+	}
+}
+
+func TestSoldCount_ChildrenPaidCountedParentSkipped(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	a := seedSoldProduct(t, db, "ca")
+	parent := seedSoldOrder(t, db, "CP", constants.OrderStatusPendingPayment, nil, map[uint]int{a.ID: 3})
+	seedSoldOrder(t, db, "CP-1", constants.OrderStatusPendingPayment, &parent.ID, map[uint]int{a.ID: 3})
+	if err := store.UpdateStatus(parent.ID, constants.OrderStatusPaid, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, a.ID); got != 0 {
+		t.Fatalf("parent must not count, got %d", got)
+	}
+	if _, err := store.UpdateChildrenStatus(parent.ID, constants.OrderStatusPaid, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateChildrenStatus(parent.ID, constants.OrderStatusCompleted, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, a.ID); got != 3 {
+		t.Fatalf("child want 3, got %d", got)
 	}
 }
 
@@ -411,7 +486,7 @@ func TestSoldCountBackfill_CountsHistoricalDeliveredOnceAndSkipsParents(t *testi
 	// 父单（有子单）不计，子单已发货计入 1
 	parent := seedSoldOrder(t, db, "H2", constants.OrderStatusDelivered, nil, map[uint]int{a.ID: 1, b.ID: 4})
 	seedSoldOrder(t, db, "H2-1", constants.OrderStatusDelivered, &parent.ID, map[uint]int{a.ID: 1})
-	seedSoldOrder(t, db, "H2-2", constants.OrderStatusPaid, &parent.ID, map[uint]int{b.ID: 4})
+	seedSoldOrder(t, db, "H2-2", constants.OrderStatusPaid /* 新口径计入 */, &parent.ID, map[uint]int{b.ID: 4})
 	// 退款但有交付记录：计入 3
 	refunded := seedSoldOrder(t, db, "H3", constants.OrderStatusRefunded, nil, map[uint]int{b.ID: 3})
 	now := time.Now()
@@ -431,7 +506,42 @@ func TestSoldCountBackfill_CountsHistoricalDeliveredOnceAndSkipsParents(t *testi
 	if got := soldCountOf(t, db, a.ID); got != 3 {
 		t.Fatalf("product a want 3, got %d", got)
 	}
-	if got := soldCountOf(t, db, b.ID); got != 3 {
-		t.Fatalf("product b want 3, got %d", got)
+	if got := soldCountOf(t, db, b.ID); got != 7 { // 3（退款有交付）+ 4（已付款子单）
+		t.Fatalf("product b want 7, got %d", got)
+	}
+}
+
+func TestSoldCountRebuildV2_ResetsAndRecountsWithPaidStatuses(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	a := seedSoldProduct(t, db, "ra")
+	b := seedSoldProduct(t, db, "rb")
+	now := time.Now()
+	seedSoldOrder(t, db, "R1", constants.OrderStatusCompleted, nil, map[uint]int{a.ID: 2})
+	seedSoldOrder(t, db, "R2", constants.OrderStatusPaid, nil, map[uint]int{a.ID: 1})
+	seedSoldOrder(t, db, "R3", constants.OrderStatusFulfilling, nil, map[uint]int{b.ID: 5})
+	parent := seedSoldOrder(t, db, "R4", constants.OrderStatusPaid, nil, map[uint]int{b.ID: 9})
+	seedSoldOrder(t, db, "R4-1", constants.OrderStatusPaid, &parent.ID, map[uint]int{b.ID: 9})
+	// 付款后退款（有 paid_at）：计入
+	r5 := seedSoldOrder(t, db, "R5", constants.OrderStatusRefunded, nil, map[uint]int{a.ID: 4})
+	db.Model(&orderdomain.Order{}).Where("id = ?", r5.ID).Update("paid_at", now)
+	// 未付款就退款/取消/待付款：不计
+	seedSoldOrder(t, db, "R6", constants.OrderStatusRefunded, nil, map[uint]int{a.ID: 7})
+	seedSoldOrder(t, db, "R7", constants.OrderStatusCanceled, nil, map[uint]int{a.ID: 7})
+	seedSoldOrder(t, db, "R8", constants.OrderStatusPendingPayment, nil, map[uint]int{b.ID: 7})
+	// 模拟 v1 已累加过的脏状态
+	if _, err := gormutil.BackfillOrderSoldCount(db); err != nil {
+		t.Fatal(err)
+	}
+	db.Model(&productdomain.Product{}).Where("id = ?", a.ID).Update("sold_count", 100)
+	for i := 0; i < 2; i++ {
+		if _, err := gormutil.RebuildOrderSoldCount(db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := soldCountOf(t, db, a.ID); got != 7 {
+		t.Fatalf("product a want 7 (2+1+4), got %d", got)
+	}
+	if got := soldCountOf(t, db, b.ID); got != 14 {
+		t.Fatalf("product b want 14 (5+9), got %d", got)
 	}
 }
