@@ -58,18 +58,22 @@ func (r *Store) Create(order *orderdomain.Order, items []orderdomain.OrderItem) 
 		}
 		order.GuestPassword = r.hashGuestCredential(order.GuestEmail, order.GuestPassword)
 	}
-	if err := r.db.Create(order).Error; err != nil {
-		return err
-	}
-	for i := range items {
-		items[i].OrderID = order.ID
-	}
-	if len(items) > 0 {
-		if err := r.db.Create(&items).Error; err != nil {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(order).Error; err != nil {
 			return err
 		}
-	}
-	return nil
+		for i := range items {
+			items[i].OrderID = order.ID
+		}
+		if len(items) > 0 {
+			if err := tx.Create(&items).Error; err != nil {
+				return err
+			}
+			// v3「下单 N 次」：叶子订单创建时计数（同一事务内）
+			return gormutil.CountOrderOnCreate(tx, order.ID)
+		}
+		return nil
+	})
 }
 
 func (r *Store) hashGuestCredential(email, password string) string {
@@ -524,9 +528,6 @@ func (r *Store) UpdateStatus(id uint, status string, updates map[string]interfac
 		if err := tx.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error; err != nil {
 			return err
 		}
-		if gormutil.IsSoldCountStatus(status) {
-			return gormutil.RecordOrderSoldCount(tx, id)
-		}
 		return nil
 	})
 }
@@ -800,16 +801,8 @@ func (r *Store) UpdateFields(id uint, updates map[string]interface{}) error {
 	if id == 0 || len(updates) == 0 {
 		return nil
 	}
-	status, _ := updates["status"].(string)
-	if !gormutil.IsSoldCountStatus(status) {
-		return r.db.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error
-	}
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error; err != nil {
-			return err
-		}
-		return gormutil.RecordOrderSoldCount(tx, id)
-	})
+	// v3 起计数只在创建订单时发生，状态变化不再触发
+	return r.db.Model(&orderdomain.Order{}).Where("orders.deleted_at IS NULL AND id = ?", id).Updates(updates).Error
 }
 
 // UpdateChildrenStatus 把所有非目标状态的子订单批量更新为 targetStatus,返回受影响行数。
@@ -830,9 +823,6 @@ func (r *Store) UpdateChildrenStatus(parentID uint, targetStatus string, now tim
 			return result.Error
 		}
 		affected = result.RowsAffected
-		if gormutil.IsSoldCountStatus(targetStatus) {
-			return gormutil.RecordChildrenSoldCount(tx, parentID)
-		}
 		return nil
 	})
 	return affected, err

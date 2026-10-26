@@ -973,3 +973,34 @@ func ensureProductSoldCountBackfillV2Migration() error {
 		},
 	}).Error
 }
+
+const productSoldCountBackfillV3MigrationSettingKey = "migration/product_sold_count_backfill_v3"
+
+// ensureProductSoldCountBackfillV3Migration 口径改为「下单 N 次」（叶子订单笔数，任何状态）后，单事务清零并全量重算。
+// v1/v2 标记保留不动。
+func ensureProductSoldCountBackfillV3Migration() error {
+	if gormdb.DB == nil {
+		return errors.New("database is not initialized")
+	}
+	var marker settingsstore.SettingRecord
+	if err := gormdb.DB.First(&marker, "key = ?", productSoldCountBackfillV3MigrationSettingKey).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	} else if migrationDone(marker.ValueJSON) {
+		return nil
+	}
+	marked, err := gormutil.RebuildOrderCountV3(gormdb.DB)
+	if err != nil {
+		return err
+	}
+	logger.Infow("product_sold_count_backfill_v3_done", "leaf_orders_marked", marked)
+	return gormdb.DB.Save(&settingsstore.SettingRecord{
+		Key: productSoldCountBackfillV3MigrationSettingKey,
+		ValueJSON: jsonmap.JSON{
+			"done":               true,
+			"leaf_orders_marked": marked,
+			"migrated_at":        time.Now().UTC().Format(time.RFC3339),
+		},
+	}).Error
+}
