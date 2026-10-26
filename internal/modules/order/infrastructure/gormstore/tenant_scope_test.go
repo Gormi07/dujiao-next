@@ -322,42 +322,59 @@ func soldCountOf(t *testing.T, db *gorm.DB, id uint) int64 {
 	return p.SoldCount
 }
 
-func createOrderViaStore(t *testing.T, store *Store, no string, parentID *uint, items []orderdomain.OrderItem) orderdomain.Order {
-	t.Helper()
-	o := orderdomain.Order{OrderNo: no, ParentID: parentID, Status: constants.OrderStatusPendingPayment, Currency: "USD", GuestEmail: "g@example.com",
-		OriginalAmount: money.FromDecimal(decimal.NewFromInt(10)), TotalAmount: money.FromDecimal(decimal.NewFromInt(10)), CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	if err := store.Create(&o, items); err != nil {
-		t.Fatalf("create order: %v", err)
-	}
-	return o
-}
-
-func item(pid uint, qty int) orderdomain.OrderItem {
-	return orderdomain.OrderItem{ProductID: pid, Quantity: qty, TitleJSON: jsonmap.JSON{"zh-CN": "t"}, FulfillmentType: constants.FulfillmentTypeAuto}
-}
-
-func TestOrderCount_CreateCountsOncePerOrderNotQuantity(t *testing.T) {
+func TestSoldCount_DeliveredThenCompletedCountsOnce(t *testing.T) {
 	db := openSoldCountTestDB(t)
 	store := New(db, "test-guest-credential-secret-with-32-bytes")
-	p := seedSoldProduct(t, db, "oc1")
-	createOrderViaStore(t, store, "C1", nil, []orderdomain.OrderItem{item(p.ID, 5)})
-	if got := soldCountOf(t, db, p.ID); got != 1 {
-		t.Fatalf("pending order must count 1 (not qty), got %d", got)
+	p := seedSoldProduct(t, db, "p1")
+	o := seedSoldOrder(t, db, "O1", constants.OrderStatusPaid, nil, map[uint]int{p.ID: 3})
+
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusDelivered, nil); err != nil {
+		t.Fatal(err)
 	}
-	// 同一叶子单内同一商品多行明细只算 1 次
-	createOrderViaStore(t, store, "C2", nil, []orderdomain.OrderItem{item(p.ID, 1), item(p.ID, 2)})
-	if got := soldCountOf(t, db, p.ID); got != 2 {
-		t.Fatalf("duplicate lines must count once, want 2 got %d", got)
+	if got := soldCountOf(t, db, p.ID); got != 3 {
+		t.Fatalf("after delivered want 3, got %d", got)
+	}
+	if err := store.UpdateFields(o.ID, map[string]interface{}{"status": constants.OrderStatusCompleted}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusCompleted, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 3 {
+		t.Fatalf("completed after delivered must not recount, want 3 got %d", got)
 	}
 }
 
-func TestOrderCount_StatusChangesNeverRecountOrDecrease(t *testing.T) {
+func TestSoldCount_PendingAndCanceledDoNotCount(t *testing.T) {
 	db := openSoldCountTestDB(t)
 	store := New(db, "test-guest-credential-secret-with-32-bytes")
-	p := seedSoldProduct(t, db, "oc2")
-	o := createOrderViaStore(t, store, "S1", nil, []orderdomain.OrderItem{item(p.ID, 3)})
-	for _, s := range []string{constants.OrderStatusPaid, constants.OrderStatusFulfilling, constants.OrderStatusPartiallyDelivered,
-		constants.OrderStatusDelivered, constants.OrderStatusCompleted, constants.OrderStatusRefunded, constants.OrderStatusCanceled} {
+	p := seedSoldProduct(t, db, "p2")
+	o := seedSoldOrder(t, db, "O2", constants.OrderStatusPendingPayment, nil, map[uint]int{p.ID: 2})
+	for _, s := range []string{constants.OrderStatusPendingPayment, constants.OrderStatusCanceled} {
+		if err := store.UpdateStatus(o.ID, s, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := soldCountOf(t, db, p.ID); got != 0 {
+		t.Fatalf("want 0, got %d", got)
+	}
+}
+
+func TestSoldCount_PaidCountsOnceThroughLifecycle(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	p := seedSoldProduct(t, db, "pl")
+	o := seedSoldOrder(t, db, "OL", constants.OrderStatusPendingPayment, nil, map[uint]int{p.ID: 4})
+	if got := soldCountOf(t, db, p.ID); got != 0 {
+		t.Fatalf("pending want 0, got %d", got)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusPaid, map[string]interface{}{"paid_at": time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 4 {
+		t.Fatalf("after paid want 4, got %d", got)
+	}
+	for _, s := range []string{constants.OrderStatusFulfilling, constants.OrderStatusPartiallyDelivered, constants.OrderStatusDelivered, constants.OrderStatusCompleted} {
 		if err := store.UpdateStatus(o.ID, s, nil); err != nil {
 			t.Fatal(err)
 		}
@@ -365,74 +382,98 @@ func TestOrderCount_StatusChangesNeverRecountOrDecrease(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := soldCountOf(t, db, p.ID); got != 1 {
-		t.Fatalf("want 1, got %d", got)
+	if got := soldCountOf(t, db, p.ID); got != 4 {
+		t.Fatalf("later statuses must not recount, want 4 got %d", got)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusRefunded, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 4 {
+		t.Fatalf("refund must not decrease, want 4 got %d", got)
 	}
 }
 
-func TestOrderCount_SplitParentNotCountedChildrenCounted(t *testing.T) {
+func TestSoldCount_FulfillingDirectlyCountsAndManualCounts(t *testing.T) {
 	db := openSoldCountTestDB(t)
 	store := New(db, "test-guest-credential-secret-with-32-bytes")
-	a := seedSoldProduct(t, db, "oca")
-	b := seedSoldProduct(t, db, "ocb")
-	parent := createOrderViaStore(t, store, "P", nil, nil)
-	createOrderViaStore(t, store, "P-1", &parent.ID, []orderdomain.OrderItem{item(a.ID, 2)})
-	createOrderViaStore(t, store, "P-2", &parent.ID, []orderdomain.OrderItem{item(b.ID, 1)})
+	p := seedSoldProduct(t, db, "pm")
+	o := seedSoldOrder(t, db, "OM", constants.OrderStatusPendingPayment, nil, nil)
+	if err := db.Create(&orderdomain.OrderItem{OrderID: o.ID, ProductID: p.ID, Quantity: 2, TitleJSON: jsonmap.JSON{"zh-CN": "t"}, FulfillmentType: constants.FulfillmentTypeManual}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateFields(o.ID, map[string]interface{}{"status": constants.OrderStatusFulfilling}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusDelivered, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 2 {
+		t.Fatalf("manual want 2, got %d", got)
+	}
+}
+
+func TestSoldCount_ChildrenPaidCountedParentSkipped(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	a := seedSoldProduct(t, db, "ca")
+	parent := seedSoldOrder(t, db, "CP", constants.OrderStatusPendingPayment, nil, map[uint]int{a.ID: 3})
+	seedSoldOrder(t, db, "CP-1", constants.OrderStatusPendingPayment, &parent.ID, map[uint]int{a.ID: 3})
+	if err := store.UpdateStatus(parent.ID, constants.OrderStatusPaid, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, a.ID); got != 0 {
+		t.Fatalf("parent must not count, got %d", got)
+	}
+	if _, err := store.UpdateChildrenStatus(parent.ID, constants.OrderStatusPaid, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateChildrenStatus(parent.ID, constants.OrderStatusCompleted, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, a.ID); got != 3 {
+		t.Fatalf("child want 3, got %d", got)
+	}
+}
+
+func TestSoldCount_ParentAndChildrenCountedOnce(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	a := seedSoldProduct(t, db, "pa")
+	b := seedSoldProduct(t, db, "pb")
+	parent := seedSoldOrder(t, db, "P", constants.OrderStatusPaid, nil, map[uint]int{a.ID: 2, b.ID: 1})
+	c1 := seedSoldOrder(t, db, "P-1", constants.OrderStatusPaid, &parent.ID, map[uint]int{a.ID: 2})
+	seedSoldOrder(t, db, "P-2", constants.OrderStatusPaid, &parent.ID, map[uint]int{b.ID: 1})
+
+	if err := store.UpdateStatus(c1.ID, constants.OrderStatusDelivered, nil); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.UpdateChildrenStatus(parent.ID, constants.OrderStatusCompleted, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.UpdateStatus(parent.ID, constants.OrderStatusCompleted, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := soldCountOf(t, db, a.ID); got != 1 {
-		t.Fatalf("a want 1, got %d", got)
+	if got := soldCountOf(t, db, a.ID); got != 2 {
+		t.Fatalf("product a want 2, got %d", got)
 	}
 	if got := soldCountOf(t, db, b.ID); got != 1 {
-		t.Fatalf("b want 1, got %d", got)
+		t.Fatalf("product b want 1, got %d", got)
 	}
 }
 
-func TestOrderCountRebuildV3_AllLeafOrdersAnyStatus(t *testing.T) {
+func TestSoldCount_RefundDoesNotDecrease(t *testing.T) {
 	db := openSoldCountTestDB(t)
 	store := New(db, "test-guest-credential-secret-with-32-bytes")
-	a := seedSoldProduct(t, db, "va")
-	b := seedSoldProduct(t, db, "vb")
-	seedSoldOrder(t, db, "V1", constants.OrderStatusPendingPayment, nil, map[uint]int{a.ID: 3})
-	seedSoldOrder(t, db, "V2", constants.OrderStatusCanceled, nil, map[uint]int{a.ID: 1, b.ID: 2})
-	seedSoldOrder(t, db, "V3", constants.OrderStatusRefunded, nil, map[uint]int{b.ID: 1})
-	parent := seedSoldOrder(t, db, "V4", constants.OrderStatusCompleted, nil, map[uint]int{a.ID: 9, b.ID: 9})
-	seedSoldOrder(t, db, "V4-1", constants.OrderStatusCompleted, &parent.ID, map[uint]int{a.ID: 9})
-	dup := seedSoldOrder(t, db, "V5", constants.OrderStatusPaid, nil, map[uint]int{b.ID: 1})
-	if err := db.Create(&orderdomain.OrderItem{OrderID: dup.ID, ProductID: b.ID, Quantity: 4, TitleJSON: jsonmap.JSON{"zh-CN": "t"}}).Error; err != nil {
+	p := seedSoldProduct(t, db, "p3")
+	o := seedSoldOrder(t, db, "O3", constants.OrderStatusPaid, nil, map[uint]int{p.ID: 5})
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusCompleted, nil); err != nil {
 		t.Fatal(err)
 	}
-	db.Model(&productdomain.Product{}).Where("id = ?", a.ID).Update("sold_count", 100)
-	for i := 0; i < 2; i++ {
-		n, err := gormutil.RebuildOrderCountV3(db)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != 5 {
-			t.Fatalf("want 5 leaf orders, got %d", n)
-		}
-	}
-	if got := soldCountOf(t, db, a.ID); got != 3 { // V1 V2 V4-1
-		t.Fatalf("a want 3, got %d", got)
-	}
-	if got := soldCountOf(t, db, b.ID); got != 3 { // V2 V3 V5
-		t.Fatalf("b want 3, got %d", got)
-	}
-	var unmarked int64
-	db.Table("orders").Where("sales_counted_at IS NULL AND NOT EXISTS (SELECT 1 FROM orders c WHERE c.parent_id = orders.id)").Count(&unmarked)
-	if unmarked != 0 {
-		t.Fatalf("all leaf orders must be marked, %d unmarked", unmarked)
-	}
-	// 重算后再改状态也不会重复计
-	if err := store.UpdateStatus(dup.ID, constants.OrderStatusCompleted, nil); err != nil {
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusRefunded, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := soldCountOf(t, db, b.ID); got != 3 {
-		t.Fatalf("b after status change want 3, got %d", got)
+	if got := soldCountOf(t, db, p.ID); got != 5 {
+		t.Fatalf("want 5, got %d", got)
 	}
 }
 
@@ -502,5 +543,93 @@ func TestSoldCountRebuildV2_ResetsAndRecountsWithPaidStatuses(t *testing.T) {
 	}
 	if got := soldCountOf(t, db, b.ID); got != 14 {
 		t.Fatalf("product b want 14 (5+9), got %d", got)
+	}
+}
+
+func createOrderViaStoreV4(t *testing.T, store *Store, no string, parentID *uint, pid uint, qty int) orderdomain.Order {
+	t.Helper()
+	o := orderdomain.Order{OrderNo: no, ParentID: parentID, Status: constants.OrderStatusPendingPayment, Currency: "USD", GuestEmail: "g@example.com",
+		OriginalAmount: money.FromDecimal(decimal.NewFromInt(10)), TotalAmount: money.FromDecimal(decimal.NewFromInt(10)), CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	var items []orderdomain.OrderItem
+	if pid != 0 {
+		items = []orderdomain.OrderItem{{ProductID: pid, Quantity: qty, TitleJSON: jsonmap.JSON{"zh-CN": "t"}, FulfillmentType: constants.FulfillmentTypeAuto}}
+	}
+	if err := store.Create(&o, items); err != nil {
+		t.Fatalf("create order: %v", err)
+	}
+	return o
+}
+
+func TestSoldCountV4_CreateDoesNotCount(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	p := seedSoldProduct(t, db, "v4c")
+	o := createOrderViaStoreV4(t, store, "V4C", nil, p.ID, 3)
+	if got := soldCountOf(t, db, p.ID); got != 0 {
+		t.Fatalf("create must not count, got %d", got)
+	}
+	var reloaded orderdomain.Order
+	db.First(&reloaded, o.ID)
+	if reloaded.SalesCountedAt != nil {
+		t.Fatal("create must not mark sales_counted_at")
+	}
+	if err := store.UpdateStatus(o.ID, constants.OrderStatusCanceled, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 0 {
+		t.Fatalf("canceled must not count, got %d", got)
+	}
+}
+
+func TestSoldCountV4_RebuildClearsV3MarksSoUnpaidOrdersCountWhenPaid(t *testing.T) {
+	db := openSoldCountTestDB(t)
+	store := New(db, "test-guest-credential-secret-with-32-bytes")
+	p := seedSoldProduct(t, db, "v4r")
+	q := seedSoldProduct(t, db, "v4q")
+	done := seedSoldOrder(t, db, "V4D", constants.OrderStatusCompleted, nil, map[uint]int{p.ID: 2})
+	pending := seedSoldOrder(t, db, "V4P", constants.OrderStatusPendingPayment, nil, map[uint]int{p.ID: 5})
+	canceled := seedSoldOrder(t, db, "V4X", constants.OrderStatusCanceled, nil, map[uint]int{q.ID: 7})
+	parent := seedSoldOrder(t, db, "V4PP", constants.OrderStatusPendingPayment, nil, map[uint]int{q.ID: 4})
+	child := seedSoldOrder(t, db, "V4PP-1", constants.OrderStatusPendingPayment, &parent.ID, map[uint]int{q.ID: 4})
+	// 模拟 v3 留下的状态：所有叶子单都已标记、sold_count 是笔数
+	now := time.Now()
+	db.Table("orders").Where("id IN ?", []uint{done.ID, pending.ID, canceled.ID, child.ID}).Update("sales_counted_at", now)
+	db.Model(&productdomain.Product{}).Where("id = ?", p.ID).Update("sold_count", 2)
+	db.Model(&productdomain.Product{}).Where("id = ?", q.ID).Update("sold_count", 2)
+	for i := 0; i < 2; i++ {
+		if _, err := gormutil.RebuildOrderSoldCountV4(db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := soldCountOf(t, db, p.ID); got != 2 {
+		t.Fatalf("p after rebuild want 2, got %d", got)
+	}
+	if got := soldCountOf(t, db, q.ID); got != 0 {
+		t.Fatalf("q after rebuild want 0, got %d", got)
+	}
+	var marked int64
+	db.Table("orders").Where("sales_counted_at IS NOT NULL").Count(&marked)
+	if marked != 1 {
+		t.Fatalf("only counted orders may be marked, got %d", marked)
+	}
+	// 原 v3 标记过的未付款单现在付款：应正常计数，之后不重复
+	if err := store.UpdateStatus(pending.ID, constants.OrderStatusPaid, map[string]interface{}{"paid_at": now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(pending.ID, constants.OrderStatusCompleted, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, p.ID); got != 7 {
+		t.Fatalf("p after pay want 7, got %d", got)
+	}
+	// 子单付款计入、父单不计
+	if err := store.UpdateStatus(parent.ID, constants.OrderStatusPaid, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateStatus(child.ID, constants.OrderStatusPaid, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := soldCountOf(t, db, q.ID); got != 4 {
+		t.Fatalf("q after child paid want 4, got %d", got)
 	}
 }
