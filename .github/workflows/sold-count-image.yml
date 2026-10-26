@@ -17,7 +17,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/gormi07/dujiao-next
-  VERSION_TAG: v1.5.0-sold.1
+  VERSION_TAG: v1.5.0-sold.2
 
 jobs:
   build:
