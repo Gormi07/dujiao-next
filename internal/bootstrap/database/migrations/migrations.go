@@ -11,12 +11,14 @@ import (
 	cartdomain "github.com/dujiao-next/internal/modules/cart/domain"
 	externalidentitydomain "github.com/dujiao-next/internal/modules/identity/externalidentity/domain"
 
+	"github.com/dujiao-next/internal/logger"
 	categorydomain "github.com/dujiao-next/internal/modules/catalog/category/domain"
 	productdomain "github.com/dujiao-next/internal/modules/catalog/product/domain"
 	orderdomain "github.com/dujiao-next/internal/modules/order/domain"
 	paymentdomain "github.com/dujiao-next/internal/modules/payment/domain"
 	procurementdomain "github.com/dujiao-next/internal/modules/procurement/domain"
 	settingsstore "github.com/dujiao-next/internal/modules/settings/infrastructure/gormstore"
+	"github.com/dujiao-next/internal/persistence/gormutil"
 	"github.com/dujiao-next/internal/platform/database/gormdb"
 	"github.com/dujiao-next/internal/shared/jsonmap"
 	"github.com/dujiao-next/internal/shared/money"
@@ -908,4 +910,35 @@ func ensureCategoryParentMigration() error {
 		},
 	}
 	return gormdb.DB.Save(&doneMarker).Error
+}
+
+const productSoldCountBackfillMigrationSettingKey = "migration/product_sold_count_backfill_v1"
+
+// ensureProductSoldCountBackfillMigration 首次升级时按订单历史一次性补算 products.sold_count，仅执行一次。
+// 补算本身也是幂等的（以 orders.sales_counted_at 为准），即使标记丢失重跑也不会重复累加。
+func ensureProductSoldCountBackfillMigration() error {
+	if gormdb.DB == nil {
+		return errors.New("database is not initialized")
+	}
+	var marker settingsstore.SettingRecord
+	if err := gormdb.DB.First(&marker, "key = ?", productSoldCountBackfillMigrationSettingKey).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	} else if migrationDone(marker.ValueJSON) {
+		return nil
+	}
+	counted, err := gormutil.BackfillOrderSoldCount(gormdb.DB)
+	if err != nil {
+		return err
+	}
+	logger.Infow("product_sold_count_backfill_done", "orders_counted", counted)
+	return gormdb.DB.Save(&settingsstore.SettingRecord{
+		Key: productSoldCountBackfillMigrationSettingKey,
+		ValueJSON: jsonmap.JSON{
+			"done":           true,
+			"orders_counted": counted,
+			"migrated_at":    time.Now().UTC().Format(time.RFC3339),
+		},
+	}).Error
 }

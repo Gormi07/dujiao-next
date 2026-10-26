@@ -751,3 +751,27 @@ func TestProductRepositoryListUpdatedAfterIncludesStockChanges(t *testing.T) {
 		t.Fatalf("unexpected incremental rows: sku=%v card=%v untouched=%v", got[skuChanged.ID], got[cardChanged.ID], got[untouched.ID])
 	}
 }
+
+// 后台编辑商品时（读出→修改→保存）不能把期间新增的已售件数覆盖回旧值。
+func TestProductUpdateDoesNotOverwriteSoldCount(t *testing.T) {
+	store, db := setupProductStoreTest(t)
+	p := productdomain.Product{Slug: "sold-keep", TitleJSON: jsonmap.JSON{"zh-CN": "a"}, CategoryID: 1}
+	if err := store.Create(&p); err != nil {
+		t.Fatal(err)
+	}
+	stale := p
+	if err := db.Exec("UPDATE products SET sold_count = 5 WHERE id = ?", p.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	stale.TitleJSON = jsonmap.JSON{"zh-CN": "b"}
+	if err := store.Update(&stale); err != nil {
+		t.Fatal(err)
+	}
+	var got productdomain.Product
+	if err := db.First(&got, p.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.SoldCount != 5 {
+		t.Fatalf("want sold_count 5 kept, got %d", got.SoldCount)
+	}
+}

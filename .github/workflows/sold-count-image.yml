@@ -1,0 +1,45 @@
+# fork 专用：构建「已售 N」定制镜像并推送到 ghcr.io（私有包）。
+# 只在 feat/sold-count 分支 push 或手动触发时运行；只使用 GITHUB_TOKEN。
+name: sold-count-image
+
+on:
+  push:
+    branches: [feat/sold-count]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: sold-count-image
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/gormi07/dujiao-next
+  VERSION_TAG: v1.5.0-sold.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            APP_VERSION=${{ env.VERSION_TAG }}
+          tags: |
+            ${{ env.IMAGE }}:${{ env.VERSION_TAG }}
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

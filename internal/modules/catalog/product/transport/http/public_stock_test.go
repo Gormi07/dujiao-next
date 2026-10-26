@@ -156,3 +156,37 @@ func TestPublicProductResponseRangeModeReturnsBucketOnly(t *testing.T) {
 		t.Fatalf("expected sku manual stock to be masked, got exact value %d", sku.ManualStockTotal)
 	}
 }
+
+func TestPublicProductResponseIncludesSoldCountRegardlessOfStockMode(t *testing.T) {
+	h := &PublicHandler{}
+	for _, mode := range []string{constants.ProductStockDisplayExact, constants.ProductStockDisplayStatus} {
+		product := &productdomain.Product{
+			ID:               1,
+			FulfillmentType:  constants.FulfillmentTypeManual,
+			StockDisplayMode: mode,
+			SoldCount:        42,
+			ManualStockSold:  9,
+			SKUs:             []productdomain.ProductSKU{{ID: 11, SKUCode: productdomain.DefaultSKUCode, IsActive: true, ManualStockTotal: 5}},
+		}
+		resp, err := h.decoratePublicProduct(product, nil)
+		if err != nil {
+			t.Fatalf("decoratePublicProduct: %v", err)
+		}
+		if resp.SoldCount != 42 {
+			t.Fatalf("mode %s: want sold_count=42, got %d", mode, resp.SoldCount)
+		}
+	}
+}
+
+func TestPublicProductResponseSoldCountZero(t *testing.T) {
+	h := &PublicHandler{}
+	product := &productdomain.Product{ID: 2, FulfillmentType: constants.FulfillmentTypeAuto,
+		SKUs: []productdomain.ProductSKU{{ID: 21, SKUCode: productdomain.DefaultSKUCode, IsActive: true}}}
+	resp, err := h.decoratePublicProduct(product, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.SoldCount != 0 {
+		t.Fatalf("want 0, got %d", resp.SoldCount)
+	}
+}

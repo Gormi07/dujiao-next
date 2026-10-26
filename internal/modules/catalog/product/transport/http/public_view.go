@@ -99,6 +99,7 @@ func (v *publicProductView) toProductResp() productpresenter.Product {
 		AutoStockAvailable:   domaincatalog.MaskStockInt64(mode, v.AutoStockAvailable),
 		StockStatus:          v.StockStatus,
 		IsSoldOut:            v.IsSoldOut,
+		SoldCount:            v.Product.SoldCount,
 		PaymentChannelIDs:    productdomain.DecodePaymentChannelIDs(v.Product.PaymentChannelIDs),
 		Category:             categorypresenter.New(&v.Product.Category),
 		SKUs:                 skus,

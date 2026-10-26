@@ -39,6 +39,7 @@ type Product struct {
 	AutoStockAvailable   int64             `json:"auto_stock_available"`
 	StockStatus          string            `json:"stock_status"`
 	IsSoldOut            bool              `json:"is_sold_out"`
+	SoldCount            int64             `json:"sold_count"` // 已售件数（真实成交，不受库存展示模式影响）
 
 	PaymentChannelIDs []uint `json:"payment_channel_ids,omitempty"`
 
