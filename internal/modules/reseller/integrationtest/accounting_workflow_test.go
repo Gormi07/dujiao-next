@@ -3,6 +3,7 @@ package integrationtest
 import (
 	"errors"
 	"fmt"
+	productdomain "github.com/dujiao-next/internal/modules/catalog/product/domain"
 	"testing"
 	"time"
 
@@ -60,6 +61,7 @@ func openResellerAccountingServiceTestDB(t *testing.T) *gorm.DB {
 		&userdomain.User{},
 		&orderdomain.Order{},
 		&orderdomain.OrderItem{},
+		&productdomain.Product{},
 		&fulfillmentdomain.Fulfillment{},
 		&paymentdomain.Payment{},
 		&paymentdomain.PaymentChannel{},

@@ -59,8 +59,15 @@ func ConsumeManualStock(db *gorm.DB, model interface{}, id uint, quantity int) (
 	return result.RowsAffected, nil
 }
 
-// SoldCountStatuses 计入商品「已售」的订单状态：已发货、已完成。
-var SoldCountStatuses = []string{constants.OrderStatusDelivered, constants.OrderStatusCompleted}
+// SoldCountStatuses 计入商品「已售」的订单状态：已付款、发货中、部分发货、已发货、已完成。
+// 部分发货（partially_delivered）只可能出现在付款之后，一并列入，保证补算与实时口径一致。
+var SoldCountStatuses = []string{
+	constants.OrderStatusPaid,
+	constants.OrderStatusFulfilling,
+	constants.OrderStatusPartiallyDelivered,
+	constants.OrderStatusDelivered,
+	constants.OrderStatusCompleted,
+}
 
 // IsSoldCountStatus 判断状态是否会触发销量累加。
 func IsSoldCountStatus(status string) bool {
@@ -75,7 +82,7 @@ func IsSoldCountStatus(status string) bool {
 // RecordOrderSoldCount 是累加商品已售件数的唯一入口，必须在写订单状态的同一事务内调用。
 //
 // 幂等规则：
-//   - 只有状态为已发货/已完成、且 sales_counted_at 为空的订单才会被“认领”；
+//   - 只有状态属于 SoldCountStatuses（已付款及之后）、且 sales_counted_at 为空的订单才会被“认领”；
 //     认领用条件 UPDATE 完成，重复调用、已发货→已完成、重复回调都不会再次累加；
 //   - 有子订单的父订单不计入（商品件数由子订单计入），避免父子重复；
 //   - 退款不扣减。
@@ -117,11 +124,11 @@ func claimAndCount(db *gorm.DB, id uint, cond string, args ...interface{}) (bool
 }
 
 // backfillCond 历史补算口径：
-//   - 当前状态为已发货/已完成；或
-//   - 当前状态为全额/部分退款，但本单或其父单存在 delivered_at 非空的交付记录（说明退款前曾经交付）。
-const backfillCond = `status IN ? OR (status IN ? AND EXISTS (
+//   - 当前状态属于 SoldCountStatuses；或
+//   - 当前状态为全额/部分退款，且曾经付款（paid_at 非空），或本单/父单存在 delivered_at 非空的交付记录。
+const backfillCond = `status IN ? OR (status IN ? AND (paid_at IS NOT NULL OR EXISTS (
 	SELECT 1 FROM fulfillments f WHERE f.delivered_at IS NOT NULL AND f.deleted_at IS NULL
-	AND (f.order_id = orders.id OR f.order_id = orders.parent_id)))`
+	AND (f.order_id = orders.id OR f.order_id = orders.parent_id))))`
 
 // BackfillOrderSoldCount 一次性补算历史订单的已售件数，可重复执行（已认领订单会被跳过）。返回本次计入的订单数。
 func BackfillOrderSoldCount(db *gorm.DB) (int, error) {
@@ -135,16 +142,52 @@ func BackfillOrderSoldCount(db *gorm.DB) (int, error) {
 	}
 	counted := 0
 	err := db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		counted, err = backfillIDs(tx, ids)
+		return err
+	})
+	return counted, err
+}
+
+func backfillIDs(tx *gorm.DB, ids []uint) (int, error) {
+	refundStatuses := []string{constants.OrderStatusRefunded, constants.OrderStatusPartiallyRefunded}
+	counted := 0
+	{
 		for _, id := range ids {
 			ok, err := claimAndCount(tx, id, backfillCond, SoldCountStatuses, refundStatuses)
 			if err != nil {
-				return err
+				return 0, err
 			}
 			if ok {
 				counted++
 			}
 		}
-		return nil
+	}
+	return counted, nil
+}
+
+// RebuildOrderSoldCount 在一个事务内全量重算：清零 products.sold_count、清空 orders.sales_counted_at，
+// 再按当前口径逐单认领累加。sold_count 完全由订单推导（后台编辑商品不会写入该字段），因此清零不会丢失手工值。
+func RebuildOrderSoldCount(db *gorm.DB) (int, error) {
+	refundStatuses := []string{constants.OrderStatusRefunded, constants.OrderStatusPartiallyRefunded}
+	counted := 0
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("UPDATE products SET sold_count = 0").Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("UPDATE orders SET sales_counted_at = NULL WHERE sales_counted_at IS NOT NULL").Error; err != nil {
+			return err
+		}
+		var ids []uint
+		if err := tx.Table("orders").
+			Where("deleted_at IS NULL").
+			Where("status IN ?", append(append([]string{}, SoldCountStatuses...), refundStatuses...)).
+			Order("id").Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		var err error
+		counted, err = backfillIDs(tx, ids)
+		return err
 	})
 	return counted, err
 }
