@@ -4,12 +4,14 @@ on:
   push:
     tags:
       - 'v*'
+      - '!v*-sold.*'
 
 permissions:
   contents: write
 
 jobs:
   goreleaser:
+    if: ${{ !contains(github.ref_name, '-sold.') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -200,3 +200,47 @@ func RecordChildrenSoldCount(db *gorm.DB, parentID uint) error {
 	}
 	return RecordOrderSoldCount(db, ids...)
 }
+
+// CountOrderOnCreate 「下单 N 次」口径（v3）：叶子订单创建时在同一事务内 +1。
+// 一笔订单对每个商品只计 1 次（同一商品多行明细去重），不按件数；有子单的父单不计；
+// 以 sales_counted_at 认领保证幂等，之后任何状态变化都不再计数、也不扣减。
+func CountOrderOnCreate(db *gorm.DB, orderID uint) error {
+	if db == nil || orderID == 0 {
+		return nil
+	}
+	claim := db.Table("orders").
+		Where("id = ? AND deleted_at IS NULL AND sales_counted_at IS NULL", orderID).
+		Where("EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = orders.id AND oi.deleted_at IS NULL)").
+		Where("NOT EXISTS (SELECT 1 FROM orders AS c WHERE c.parent_id = orders.id AND c.deleted_at IS NULL)").
+		UpdateColumn("sales_counted_at", time.Now())
+	if claim.Error != nil || claim.RowsAffected == 0 {
+		return claim.Error
+	}
+	return db.Exec(`UPDATE products SET sold_count = sold_count + 1
+		WHERE id IN (SELECT DISTINCT product_id FROM order_items WHERE order_id = ? AND deleted_at IS NULL)`, orderID).Error
+}
+
+// RebuildOrderCountV3 在一个事务内按「下单 N 次」口径全量重算：清零 sold_count、清空 sales_counted_at，
+// 再把每个商品设为包含它的未删除叶子订单笔数（任何状态），并把所有叶子订单标记为已计。返回叶子订单数。
+func RebuildOrderCountV3(db *gorm.DB) (int, error) {
+	var marked int64
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("UPDATE products SET sold_count = 0").Error; err != nil {
+			return err
+		}
+		if err := tx.Exec("UPDATE orders SET sales_counted_at = NULL WHERE sales_counted_at IS NOT NULL").Error; err != nil {
+			return err
+		}
+		const leaf = `o.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM orders c WHERE c.parent_id = o.id AND c.deleted_at IS NULL)`
+		if err := tx.Exec(`UPDATE products SET sold_count = (
+				SELECT COUNT(DISTINCT oi.order_id) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+				WHERE oi.product_id = products.id AND oi.deleted_at IS NULL AND ` + leaf + `)`).Error; err != nil {
+			return err
+		}
+		res := tx.Exec(`UPDATE orders SET sales_counted_at = ? WHERE id IN (
+				SELECT o.id FROM orders o WHERE `+leaf+`)`, time.Now())
+		marked = res.RowsAffected
+		return res.Error
+	})
+	return int(marked), err
+}

@@ -142,6 +142,9 @@ func AutoMigrate() error {
 	if err := ensureProductSoldCountBackfillV2Migration(); err != nil {
 		return err
 	}
+	if err := ensureProductSoldCountBackfillV3Migration(); err != nil {
+		return err
+	}
 	if err := ensureCartForeignKeyConstraints(); err != nil {
 		return err
 	}
