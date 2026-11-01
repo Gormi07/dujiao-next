@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -249,6 +250,16 @@ func (a *epayAdapter) VerifyCallback(raw jsonmap.JSON, form map[string][]string,
 	status := constants.PaymentStatusPending
 	if tradeStatus == "TRADE_SUCCESS" || tradeStatus == "TRADE_FINISHED" {
 		status = constants.PaymentStatusSuccess
+	}
+
+	// breach-20261102：v1（MD5 商户密钥）成功回调必须经网关主动查单确认，
+	// 防止持有密钥者伪造带有效签名的回调。查单失败一律拒绝（fail closed）。
+	if status == constants.PaymentStatusSuccess && cfg.EpayVersion != epay.VersionV2 {
+		if qErr := epay.VerifyPaidByQuery(context.Background(), cfg, orderNo, providerRef, amountStr); qErr != nil {
+			log.Printf("[epay-query-check] reject callback out_trade_no=%s trade_no=%s money=%s: %v", orderNo, providerRef, amountStr, qErr)
+			return nil, mapEpayError(qErr)
+		}
+		log.Printf("[epay-query-check] ok out_trade_no=%s trade_no=%s", orderNo, providerRef)
 	}
 
 	// amount 解析失败时返回零值：wrapper 仅做适配，金额异常由业务层判定。
