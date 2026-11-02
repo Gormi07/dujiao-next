@@ -63,9 +63,9 @@ func InitDB(driver, dsn string, pool DBPoolConfig, mode string) error {
 }
 
 func newGORMLogger(mode string, writer gormlogger.Writer) gormlogger.Interface {
-	if !strings.EqualFold(strings.TrimSpace(mode), "release") {
-		return gormlogger.Default.LogMode(gormlogger.Info)
-	}
+	// 安全：任何模式都不打印完整 SQL（Info 级会把 config_json 等含密钥的参数明文写进日志），
+	// 统一 Warn + ParameterizedQueries，慢查询告警也只输出占位符不含参数值。
+	_ = mode
 	if writer == nil {
 		writer = log.New(os.Stdout, "\r\n", log.LstdFlags)
 	}

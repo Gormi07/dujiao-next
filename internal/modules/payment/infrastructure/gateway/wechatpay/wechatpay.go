@@ -508,9 +508,9 @@ func wrapRequestError(err error) error {
 	}
 	var apiErr *core.APIError
 	if errors.As(err, &apiErr) {
-		return fmt.Errorf("%w: %s", ErrResponseInvalid, strings.TrimSpace(apiErr.Message))
+		return fmt.Errorf("%w: %s", ErrResponseInvalid, describeWechatError(apiErr, nil))
 	}
-	return fmt.Errorf("%w: %v", ErrRequestFailed, err)
+	return fmt.Errorf("%w: %s", ErrRequestFailed, describeWechatError(err, nil))
 }
 
 func parseAPIResult(result *core.APIResult) (map[string]interface{}, error) {

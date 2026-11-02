@@ -184,7 +184,7 @@ func getPlatformCertificateVisitor(
 			cfg.MerchantID,
 			cfg.APIV3Key,
 		); err != nil {
-			return nil, fmt.Errorf("%w: register certificate downloader failed", ErrRequestFailed)
+			return nil, fmt.Errorf("%w: register certificate downloader failed: %s", ErrRequestFailed, describeWechatError(err, cfg))
 		}
 	}
 	return mgr.GetCertificateVisitor(cfg.MerchantID), nil

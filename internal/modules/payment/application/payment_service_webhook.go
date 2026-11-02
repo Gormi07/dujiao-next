@@ -333,6 +333,11 @@ func (s *PaymentService) commitVerifiedWebhook(
 		return nil, result.Status, err
 	}
 
+	// 微信回调：验签通过后仍须向微信主动查单确认入账（状态/金额/transaction_id 三者一致）才放行。
+	if err := s.checkWechatWebhookByQuery(channel, payment, result, log); err != nil {
+		return nil, result.Status, err
+	}
+
 	payload := jsonmap.JSON{}
 	if result.Payload != nil {
 		payload = result.Payload
