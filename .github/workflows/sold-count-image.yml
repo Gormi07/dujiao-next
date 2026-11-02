@@ -4,7 +4,7 @@ name: sold-count-image
 
 on:
   push:
-    branches: [feat/sold-count, feat/sold-count-1.5.1, fix/epay-query-check, feat/v1.5.2-sold-qc]
+    branches: [feat/sold-count, feat/sold-count-1.5.1, fix/epay-query-check, feat/v1.5.2-sold-qc, feat/product-duplicate]
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/gormi07/dujiao-next
-  VERSION_TAG: v1.5.2-sold.2-qc
+  VERSION_TAG: v1.5.2-sold.3-qc-dup
 
 jobs:
   build:

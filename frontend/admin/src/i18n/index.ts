@@ -1723,6 +1723,14 @@ const messages = {
           activeNow: '立即上架',
         },
         confirmDelete: '确认删除商品 “{name}”？',
+        duplicate: {
+          action: '复制',
+          confirm: '复制商品 “{name}”？将复制名称、分类、价格、规格、描述、图片、发货方式等配置，不复制卡密库存、销量和订单；副本默认下架。',
+          suffix: '（副本）',
+          success: '已复制为 “{name}”（已下架，请修改后再上架）',
+          failed: '复制失败：{message}',
+          mappedNotAllowed: '对接上游的映射商品不支持复制',
+        },
         errors: {
           operationFailed: '操作失败：{message}',
           deleteFailed: '删除失败：{message}',
@@ -6269,6 +6277,14 @@ const messages = {
           activeNow: '立即上架',
         },
         confirmDelete: '確認刪除商品 “{name}”？',
+        duplicate: {
+          action: '複製',
+          confirm: '複製商品 “{name}”？將複製名稱、分類、價格、規格、描述、圖片、發貨方式等配置，不複製卡密庫存、銷量和訂單；副本預設下架。',
+          suffix: '（副本）',
+          success: '已複製為 “{name}”（已下架，請修改後再上架）',
+          failed: '複製失敗：{message}',
+          mappedNotAllowed: '對接上游的映射商品不支援複製',
+        },
         errors: {
           operationFailed: '操作失敗：{message}',
           deleteFailed: '刪除失敗：{message}',
@@ -10815,6 +10831,14 @@ const messages = {
           activeNow: 'Publish immediately',
         },
         confirmDelete: 'Delete product \"{name}\"?',
+        duplicate: {
+          action: 'Duplicate',
+          confirm: 'Duplicate product "{name}"? Settings (title, category, price, SKUs, description, images, fulfillment) are copied; card secrets, sales and orders are not. The copy is inactive by default.',
+          suffix: ' (Copy)',
+          success: 'Duplicated as "{name}" (inactive, edit before activating)',
+          failed: 'Duplicate failed: {message}',
+          mappedNotAllowed: 'Mapped upstream products cannot be duplicated',
+        },
         errors: {
           operationFailed: 'Operation failed: {message}',
           deleteFailed: 'Delete failed: {message}',

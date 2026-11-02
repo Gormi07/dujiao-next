@@ -388,6 +388,92 @@ const handleDelete = async (product: AdminProduct) => {
   }
 }
 
+// handleDuplicate 复制商品配置为一个新商品（默认下架）。
+// 只复制商品配置：名称（加后缀）、分类、价格、规格/SKU、描述、图片、发货方式、表单、批发价等；
+// 不复制卡密库存、销量、订单——手动库存置 0，卡密属于独立数据表，走创建接口天然不会带过去。
+const duplicatingId = ref<number | null>(null)
+const handleDuplicate = async (product: AdminProduct) => {
+  if (duplicatingId.value) return
+  if (product.is_mapped) {
+    notifyError(t('admin.products.duplicate.mappedNotAllowed'))
+    return
+  }
+  const confirmed = await confirmAction({ description: t('admin.products.duplicate.confirm', { name: getLocalizedText(product.title) }), confirmText: t('admin.products.duplicate.action') })
+  if (!confirmed) return
+  duplicatingId.value = product.id
+  try {
+    const res = await adminAPI.getProduct(product.id)
+    const src = res.data.data as AdminProduct & Record<string, any>
+    if (src.is_mapped) throw new Error(t('admin.products.duplicate.mappedNotAllowed'))
+    const suffix = t('admin.products.duplicate.suffix')
+    const title: Record<string, string> = {}
+    Object.entries(src.title || {}).forEach(([lang, text]) => {
+      const v = String(text || '').trim()
+      title[lang] = v ? v + suffix : ''
+    })
+    const rows: AdminProductSKU[] = Array.isArray(src.skus) ? src.skus : []
+    const singleDefault = rows.length === 1 && String(rows[0]?.sku_code || '').trim().toUpperCase() === 'DEFAULT'
+    const skus = singleDefault ? [] : rows.map((sku, index) => ({
+      sku_code: String(sku.sku_code || '').trim(),
+      spec_values: sku.spec_values || {},
+      price_amount: Number(sku.price_amount || 0),
+      cost_price_amount: Number(sku.cost_price_amount || 0),
+      manual_stock_total: 0,
+      is_active: sku.is_active ?? true,
+      sort_order: Number(sku.sort_order ?? index) || 0,
+    }))
+    let paymentChannelIDs: number[] = []
+    const rawChannels = src.payment_channel_ids as unknown
+    if (Array.isArray(rawChannels)) paymentChannelIDs = rawChannels.map(Number).filter((id) => id > 0)
+    else if (typeof rawChannels === 'string' && rawChannels.trim()) {
+      try { const parsed = JSON.parse(rawChannels); if (Array.isArray(parsed)) paymentChannelIDs = parsed.map(Number).filter((id) => id > 0) } catch { /* ignore */ }
+    }
+    const imagesRaw = src.images as any
+    const tagsRaw = src.tags as any
+    const baseSlug = String(src.slug || 'product').trim()
+    const payload = {
+      slug: `${baseSlug}-copy-${Date.now().toString(36)}`,
+      category_id: Number(src.category_id),
+      seo_meta: src.seo_meta || {},
+      title,
+      description: src.description || {},
+      content: src.content || {},
+      instructions: src.instructions || {},
+      price_amount: Number(src.price_amount || 0),
+      cost_price_amount: Number(src.cost_price_amount || 0),
+      images: Array.isArray(imagesRaw) ? imagesRaw : (Array.isArray(imagesRaw?.images) ? imagesRaw.images : []),
+      tags: Array.isArray(tagsRaw) ? tagsRaw : (Array.isArray(tagsRaw?.tags) ? tagsRaw.tags : []),
+      purchase_type: src.purchase_type || 'member',
+      min_purchase_quantity: Number(src.min_purchase_quantity || 0),
+      max_purchase_quantity: Number(src.max_purchase_quantity || 0),
+      stock_display_mode: src.stock_display_mode || 'exact',
+      fulfillment_type: src.fulfillment_type || 'manual',
+      manual_stock_total: 0,
+      skus,
+      payment_channel_ids: paymentChannelIDs,
+      is_affiliate_enabled: Boolean(src.is_affiliate_enabled),
+      is_active: false,
+      sort_order: Number(src.sort_order || 0),
+      manual_form_schema: src.manual_form_schema || { fields: [] },
+    }
+    const created = await adminAPI.createProduct(payload as unknown as Partial<AdminProduct>)
+    const newProduct = created.data?.data as AdminProduct | undefined
+    const wholesale = Array.isArray(src.wholesale_prices) ? src.wholesale_prices : []
+    if (newProduct?.id && wholesale.length) {
+      await adminAPI.updateProductWholesalePrices(newProduct.id, {
+        wholesale_prices: wholesale.map((w) => ({ sku_code: w.sku_code, min_quantity: Number(w.min_quantity), unit_price: Number(w.unit_price) })),
+      })
+    }
+    notifySuccess(t('admin.products.duplicate.success', { name: getLocalizedText(title as any) }))
+    fetchProducts()
+  } catch (err: any) {
+    if (isNotifiedError(err)) return
+    notifyError(t('admin.products.duplicate.failed', { message: err?.message || '' }))
+  } finally {
+    duplicatingId.value = null
+  }
+}
+
 const toggleStatus = async (product: AdminProduct) => {
   const newStatus = !product.is_active
   try {
@@ -766,6 +852,7 @@ watch(
             <TableCell class="px-6 py-4 text-right">
               <div class="flex flex-wrap items-center justify-end gap-2">
                 <Button size="sm" variant="outline" @click="openEditById(product.id)">{{ t('admin.products.actions.edit') }}</Button>
+                <Button size="sm" variant="outline" :disabled="duplicatingId === product.id" @click="handleDuplicate(product)">{{ t('admin.products.duplicate.action') }}</Button>
                 <Button size="sm" variant="destructive" @click="handleDelete(product)">{{ t('admin.products.actions.delete') }}</Button>
               </div>
             </TableCell>
