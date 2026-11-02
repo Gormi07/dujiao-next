@@ -394,17 +394,14 @@ const handleDelete = async (product: AdminProduct) => {
 const duplicatingId = ref<number | null>(null)
 const handleDuplicate = async (product: AdminProduct) => {
   if (duplicatingId.value) return
-  if (product.is_mapped) {
-    notifyError(t('admin.products.duplicate.mappedNotAllowed'))
-    return
-  }
   const confirmed = await confirmAction({ description: t('admin.products.duplicate.confirm', { name: getLocalizedText(product.title) }), confirmText: t('admin.products.duplicate.action') })
   if (!confirmed) return
   duplicatingId.value = product.id
   try {
     const res = await adminAPI.getProduct(product.id)
     const src = res.data.data as AdminProduct & Record<string, any>
-    if (src.is_mapped) throw new Error(t('admin.products.duplicate.mappedNotAllowed'))
+    // 对接商品（映射自上游）复制为普通本地商品：不建任何上游映射，发货方式改为人工，不会触发代采。
+    const fromMapped = Boolean(src.is_mapped) || src.fulfillment_type === 'upstream'
     const suffix = t('admin.products.duplicate.suffix')
     const title: Record<string, string> = {}
     Object.entries(src.title || {}).forEach(([lang, text]) => {
@@ -447,7 +444,7 @@ const handleDuplicate = async (product: AdminProduct) => {
       min_purchase_quantity: Number(src.min_purchase_quantity || 0),
       max_purchase_quantity: Number(src.max_purchase_quantity || 0),
       stock_display_mode: src.stock_display_mode || 'exact',
-      fulfillment_type: src.fulfillment_type || 'manual',
+      fulfillment_type: fromMapped ? 'manual' : (src.fulfillment_type || 'manual'),
       manual_stock_total: 0,
       skus,
       payment_channel_ids: paymentChannelIDs,
