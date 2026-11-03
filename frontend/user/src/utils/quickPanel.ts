@@ -31,7 +31,7 @@ export const DEFAULT_QUICK_PANEL: QuickPanelConfig = {
     item({ key: 'member', title: '会员中心', icon: 'user', tone: 'indigo', url: '/me' }),
     item({ key: 'recharge', title: '充值余额', icon: 'wallet', tone: 'green', url: '/me/wallet' }),
     item({ key: 'twofa', title: '2FA 接码', icon: 'key', tone: 'orange', url: 'https://2fa.show', new_tab: true }),
-    item({ key: 'kf', title: '在线客服', icon: 'message', tone: 'teal', url: 'https://work.weixin.qq.com/kfid/kfc2f48b43282767d5a', new_tab: true }),
+    item({ key: 'kf', title: '微信客服', icon: 'message', tone: 'teal', url: 'https://work.weixin.qq.com/kfid/kfc2f48b43282767d5a', new_tab: true }),
     item({ key: 'tg', title: 'TG 客服', icon: 'send', tone: 'sky', url: 'https://t.me/kejimiaozai', new_tab: true }),
     item({ key: 'antilost', title: '加入防失联售后群', icon: 'megaphone', tone: 'purple', action: 'qr', qr_image: '/quick-panel/antilost-qr.png', wide: true }),
   ],
