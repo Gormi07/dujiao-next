@@ -17,7 +17,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/gormi07/dujiao-next
-  VERSION_TAG: v1.5.2-sold.10-qc-dup-wxq-theme-tags-qp3
+  VERSION_TAG: v1.5.2-sold.11-qc-dup-wxq-theme-tags-qp3-chips
 
 jobs:
   build:
