@@ -48,6 +48,11 @@ func normalizeSiteSetting(value map[string]interface{}) jsonmap.JSON {
 	normalized["template_mode"] = normalizeSiteTemplateMode(value["template_mode"])
 	normalized[constants.SettingFieldStorefrontTemplate] = normalizeStorefrontTemplate(value[constants.SettingFieldStorefrontTemplate])
 	normalized[settingFieldStorefrontTheme] = normalizeStorefrontTheme(value[settingFieldStorefrontTheme])
+	if qp, ok := normalizeQuickPanel(value[settingFieldQuickPanel]); ok {
+		normalized[settingFieldQuickPanel] = qp
+	} else {
+		delete(normalized, settingFieldQuickPanel)
+	}
 
 	if raw, ok := value["languages"]; ok {
 		normalized["languages"] = normalizeSiteLanguages(raw)

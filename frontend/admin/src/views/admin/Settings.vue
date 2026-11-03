@@ -23,6 +23,8 @@ import SettingsOrderEmailTemplateTab from './components/SettingsOrderEmailTempla
 import SettingsNavigationTab from './components/SettingsNavigationTab.vue'
 import SettingsHomeAnnouncementTab from './components/SettingsHomeAnnouncementTab.vue'
 import SettingsUpstreamSyncTab from './components/SettingsUpstreamSyncTab.vue'
+import QuickPanelEditor from './components/QuickPanelEditor.vue'
+import { defaultQuickPanel, type QuickPanelConfig } from '@/utils/quickPanel'
 import StorefrontThemeDialog, { type ThemeItem } from './components/StorefrontThemeDialog.vue'
 
 const { t } = useI18n()
@@ -225,6 +227,7 @@ const form = reactive({
   template_mode: 'card' as 'card' | 'list',
   storefront_theme: {} as Partial<Record<'classic' | 'vault', ThemeItem>>,
 })
+const quickPanel = ref<QuickPanelConfig>(defaultQuickPanel())
 
 // 店面外观配置弹窗
 const themeDialogOpen = ref(false)
@@ -482,6 +485,10 @@ const fetchSettings = async () => {
       const rawStorefrontTemplate = String(data.storefront_template || 'classic').trim()
       form.storefront_template = rawStorefrontTemplate === 'vault' ? 'vault' : 'classic'
       form.storefront_theme = normalizeStorefrontThemeForm(data.storefront_theme)
+      {
+        const qp = data.quick_panel as QuickPanelConfig | undefined
+        quickPanel.value = qp && Array.isArray(qp.items) ? JSON.parse(JSON.stringify(qp)) : defaultQuickPanel()
+      }
     }
 
     if (orderRes.data && orderRes.data.data) {
@@ -645,6 +652,7 @@ const saveSiteSettings = async () => {
       storefront_template: form.storefront_template,
       template_mode: form.template_mode,
       storefront_theme: form.storefront_theme,
+      quick_panel: quickPanel.value,
     },
   }
   await adminAPI.updateSettings(payload)
@@ -1262,6 +1270,15 @@ onMounted(() => {
         :saving="loading"
         @apply="applyThemeAndSave"
       />
+
+      <!-- Quick service panel -->
+      <div class="rounded-xl border border-border bg-card">
+        <div class="flex flex-col gap-1 border-b border-border bg-muted/40 px-6 py-4">
+          <h2 class="text-lg font-semibold">快捷服务面板</h2>
+          <p class="text-xs text-muted-foreground">前台左下角的快捷服务入口（两个模板通用）：可改名称、链接、图标、显示/隐藏、排序，二维码型模块可上传图片</p>
+        </div>
+        <div class="px-6 py-6"><QuickPanelEditor v-model="quickPanel" /></div>
+      </div>
 
       <!-- Product layout: card / list -->
       <div class="rounded-xl border border-border bg-card">
