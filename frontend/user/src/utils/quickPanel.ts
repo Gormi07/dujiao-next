@@ -33,8 +33,7 @@ export const DEFAULT_QUICK_PANEL: QuickPanelConfig = {
     item({ key: 'twofa', title: '2FA 接码', icon: 'key', tone: 'orange', url: 'https://2fa.show', new_tab: true }),
     item({ key: 'kf', title: '在线客服', icon: 'message', tone: 'teal', url: 'https://work.weixin.qq.com/kfid/kfc2f48b43282767d5a', new_tab: true }),
     item({ key: 'tg', title: 'TG 客服', icon: 'send', tone: 'sky', url: 'https://t.me/kejimiaozai', new_tab: true }),
-    item({ key: 'antilost', title: '加入防失联售后群', icon: 'megaphone', tone: 'purple', action: 'qr', qr_image: '/quick-panel/antilost-qr.png' }),
-    item({ key: 'group', title: '加入售后交流群', icon: 'users', tone: 'teal', new_tab: true, visible: false, wide: true }),
+    item({ key: 'antilost', title: '加入防失联售后群', icon: 'megaphone', tone: 'purple', action: 'qr', qr_image: '/quick-panel/antilost-qr.png', wide: true }),
   ],
 }
 
