@@ -22,21 +22,22 @@
         <h3 class="truncate text-sm font-bold text-foreground">{{ title }}</h3>
       </div>
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="stockPill.tone">
+        <span data-sf-badge="stock" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="stockPill.tone">
           <component :is="stockPill.icon" class="h-3 w-3" />
           {{ stockPill.label }}
         </span>
-        <span class="inline-flex items-center gap-1 rounded-full bg-[color:var(--teal-soft)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--teal-strong)]">
+        <span data-sf-badge="fulfillment" class="inline-flex items-center gap-1 rounded-full bg-[color:var(--teal-soft)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--teal-strong)]">
           <component :is="product.fulfillment_type === 'auto' ? Zap : Pencil" class="h-3 w-3" />
           {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
         </span>
-        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="product.purchase_type === 'guest' ? 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]' : 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]'">
+        <span data-sf-badge="purchase" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="product.purchase_type === 'guest' ? 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]' : 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]'">
           <component :is="product.purchase_type === 'guest' ? UserPlus : Lock" class="h-3 w-3" />
           {{ getPurchaseTypeLabel(product.purchase_type) }}
         </span>
+        <span v-if="normalizeSoldCount(product) > 0" data-sf-badge="sold" class="sf-sold-optin inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground"><TrendingUp class="h-3 w-3" />{{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}</span>
         <span v-if="priceSignal" class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="priceSignal.tone">{{ priceSignal.label }}</span>
         <template v-if="!soldOut && product.tags && product.tags.length">
-          <span v-for="(tag, i) in product.tags.slice(0, 2)" :key="i" class="sf-tag inline-flex max-w-[120px] items-center truncate rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{{ tag }}</span>
+          <span v-for="(tag, i) in product.tags.slice(0, 2)" :key="i" data-sf-badge="custom" class="sf-tag inline-flex max-w-[120px] items-center truncate rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{{ tag }}</span>
         </template>
       </div>
     </div>
@@ -70,6 +71,8 @@ import { useI18n } from 'vue-i18n'
 import { AlarmClock, ChevronRight, Lock, Package, Pencil, ShoppingCart, UserPlus, XCircle, Zap } from 'lucide-vue-next'
 import { getFirstImageUrl, getImageUrl } from '../../../utils/image'
 import { useLocalized, useProductLabels } from '../../../composables/useProduct'
+import { normalizeSoldCount } from '../../../utils/soldCount'
+import { TrendingUp } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{ product: any; index?: number }>(), { index: 0 })
 

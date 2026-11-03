@@ -700,3 +700,8 @@ html[data-telegram-mini-app="true"] body {
 .theme-prose p:has(> img) + p:has(> img) > img {
   margin-top: 0;
 }
+
+/* 已售标签（后台外观配置可开启）：默认隐藏；开启规则在 @layer utilities 里用 !important 覆盖 */
+.sf-sold-optin {
+  display: none;
+}

@@ -58,12 +58,18 @@ const FIELDS: FieldDef[] = [
     { value: 'medium', label: ['中等', '中等', 'Medium'] },
     { value: 'bold', label: ['加粗', '加粗', 'Bold'] },
   ] },
+  { key: 'badge_stock', kind: 'enum', group: 'badge', label: ['库存标签（有库存/缺货）', '庫存標籤（有庫存/缺貨）', 'Stock badge'], def: 'hide', options: [{ value: 'show', label: ['显示', '顯示', 'Show'] }, { value: 'hide', label: ['隐藏', '隱藏', 'Hide'] }] },
+  { key: 'badge_fulfillment', kind: 'enum', group: 'badge', label: ['交付方式（自动/人工交付）', '交付方式（自動/人工交付）', 'Delivery badge'], def: 'hide', options: [{ value: 'show', label: ['显示', '顯示', 'Show'] }, { value: 'hide', label: ['隐藏', '隱藏', 'Hide'] }] },
+  { key: 'badge_purchase', kind: 'enum', group: 'badge', label: ['购买身份（游客可购/会员）', '購買身分（遊客可購/會員）', 'Purchase badge (guest/member)'], def: 'hide', options: [{ value: 'show', label: ['显示', '顯示', 'Show'] }, { value: 'hide', label: ['隐藏', '隱藏', 'Hide'] }] },
+  { key: 'badge_custom', kind: 'enum', group: 'badge', label: ['商品自定义标签', '商品自訂標籤', 'Custom product tags'], def: 'hide', options: [{ value: 'show', label: ['显示', '顯示', 'Show'] }, { value: 'hide', label: ['隐藏', '隱藏', 'Hide'] }] },
+  { key: 'badge_sold', kind: 'enum', group: 'badge', label: ['已售 N 件（真实销量）', '已售 N 件（真實銷量）', 'Sold count (real)'], def: 'show', options: [{ value: 'show', label: ['显示', '顯示', 'Show'] }, { value: 'hide', label: ['隐藏', '隱藏', 'Hide'] }] },
 ]
 const GROUPS: Array<{ id: string; label: [string, string, string] }> = [
   { id: 'color', label: ['颜色', '顏色', 'Colors'] },
   { id: 'font', label: ['字体', '字體', 'Typography'] },
   { id: 'radius', label: ['圆角', '圓角', 'Radius'] },
   { id: 'tag', label: ['标签样式', '標籤樣式', 'Tag style'] },
+  { id: 'badge', label: ['标签显示', '標籤顯示', 'Badges'] },
 ]
 const fieldMap = Object.fromEntries(FIELDS.map((f) => [f.key, f])) as Record<string, FieldDef>
 const COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/

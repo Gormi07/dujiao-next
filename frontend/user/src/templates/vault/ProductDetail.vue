@@ -46,19 +46,20 @@
           <h1 class="my-2 mb-3 text-[32px] font-extrabold">{{ getLocalizedText(product.title) }}</h1>
 
           <div class="mb-1.5 flex flex-wrap gap-2">
-            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold" :class="stockPillTone">{{ getStockStatusLabel(product) }}</span>
-            <span class="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--teal-soft)] px-2.5 py-1 text-[12.5px] font-semibold text-[color:var(--teal-strong)]">
+            <span data-sf-badge="stock" class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold" :class="stockPillTone">{{ getStockStatusLabel(product) }}</span>
+            <span data-sf-badge="fulfillment" class="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--teal-soft)] px-2.5 py-1 text-[12.5px] font-semibold text-[color:var(--teal-strong)]">
               <component :is="product.fulfillment_type === 'auto' ? Zap : Pencil" class="h-3.5 w-3.5" />
               {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
             </span>
-            <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold" :class="product.purchase_type === 'guest' ? 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]' : 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]'">
+            <span data-sf-badge="purchase" class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] font-semibold" :class="product.purchase_type === 'guest' ? 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]' : 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]'">
               <component :is="product.purchase_type === 'guest' ? UserPlus : Lock" class="h-3.5 w-3.5" />
               {{ getPurchaseTypeLabel(product.purchase_type) }}
             </span>
+            <span v-if="normalizeSoldCount(product) > 0" data-sf-badge="sold" class="sf-sold-optin inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[12.5px] font-semibold tabular-nums text-muted-foreground"><TrendingUp class="h-3.5 w-3.5" />{{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}</span>
           </div>
 
           <div v-if="product.tags && product.tags.length" class="mb-1 flex flex-wrap gap-1.5">
-            <span v-for="(tag, i) in product.tags" :key="i" class="sf-tag inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[12.5px] font-semibold text-muted-foreground">{{ tag }}</span>
+            <span v-for="(tag, i) in product.tags" :key="i" data-sf-badge="custom" class="sf-tag inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[12.5px] font-semibold text-muted-foreground">{{ tag }}</span>
           </div>
 
           <!-- 价格 -->
@@ -255,6 +256,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { processHtmlForDisplay } from '../../utils/content'
 import { useProductDetail } from '../../composables/useProductDetail'
+import { normalizeSoldCount } from '../../utils/soldCount'
+import { TrendingUp } from 'lucide-vue-next'
 import VaultProductMobileBar from './components/VaultProductMobileBar.vue'
 
 const { t } = useI18n()

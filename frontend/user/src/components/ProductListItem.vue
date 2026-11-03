@@ -38,7 +38,7 @@
           {{ getLocalizedText(product.title) }}
         </h3>
         <span v-for="(tag, tagIndex) in (product.tags || []).slice(0, 1)" :key="tagIndex"
-          class="sf-tag hidden md:inline-flex items-center rounded-md border border-white/25 bg-black/55 px-1.5 py-0 text-[10px] font-medium text-white backdrop-blur-sm flex-shrink-0">
+          data-sf-badge="custom" class="sf-tag hidden md:inline-flex items-center rounded-md border border-white/25 bg-black/55 px-1.5 py-0 text-[10px] font-medium text-white backdrop-blur-sm flex-shrink-0">
           {{ tag }}
         </span>
       </div>
@@ -46,28 +46,28 @@
       <!-- Row 2: Badges -->
       <div class="flex flex-wrap items-center gap-1">
         <!-- Mobile: fulfillment + stock warning -->
-        <Badge class="sm:hidden" size="xs" :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
+        <Badge data-sf-badge="fulfillment" class="sm:hidden" size="xs" :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
           {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
         </Badge>
-        <Badge class="sm:hidden tabular-nums" size="xs" variant="neutral" data-testid="sold-count">
+        <Badge data-sf-badge="sold" class="sm:hidden tabular-nums" size="xs" variant="neutral" data-testid="sold-count">
           {{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}
         </Badge>
-        <Badge v-if="product.stock_status === 'out_of_stock' || product.stock_status === 'low_stock'"
+        <Badge data-sf-badge="stock" v-if="product.stock_status === 'out_of_stock' || product.stock_status === 'low_stock'"
           class="sm:hidden" size="xs" :variant="getStockBadgeVariant(product.stock_status)">
           {{ getStockStatusLabel(product) }}
         </Badge>
 
         <!-- Desktop: all badges -->
-        <Badge class="hidden sm:inline-flex" size="xs" :variant="product.purchase_type === 'guest' ? 'warning' : 'success'">
+        <Badge data-sf-badge="purchase" class="hidden sm:inline-flex" size="xs" :variant="product.purchase_type === 'guest' ? 'warning' : 'success'">
           {{ getPurchaseTypeLabel(product.purchase_type) }}
         </Badge>
-        <Badge class="hidden sm:inline-flex" size="xs" :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
+        <Badge data-sf-badge="fulfillment" class="hidden sm:inline-flex" size="xs" :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
           {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
         </Badge>
-        <Badge class="hidden sm:inline-flex tabular-nums" size="xs" variant="neutral" data-testid="sold-count">
+        <Badge data-sf-badge="sold" class="hidden sm:inline-flex tabular-nums" size="xs" variant="neutral" data-testid="sold-count">
           {{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}
         </Badge>
-        <Badge class="hidden sm:inline-flex" size="xs" :variant="getStockBadgeVariant(product.stock_status)">
+        <Badge data-sf-badge="stock" class="hidden sm:inline-flex" size="xs" :variant="getStockBadgeVariant(product.stock_status)">
           {{ getStockStatusLabel(product) }}
         </Badge>
       </div>

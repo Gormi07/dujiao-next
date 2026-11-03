@@ -35,3 +35,14 @@ func TestNormalizeStorefrontTheme(t *testing.T) {
 		t.Fatal("non-map should be empty")
 	}
 }
+
+func TestNormalizeStorefrontThemeBadges(t *testing.T) {
+	got := normalizeStorefrontTheme(map[string]interface{}{"vault": map[string]interface{}{"badge_purchase": "hide", "badge_sold": "show", "badge_stock": "x"}})
+	v := got["vault"].(map[string]interface{})
+	if v["badge_purchase"] != "hide" || v["badge_sold"] != "show" {
+		t.Fatalf("%#v", v)
+	}
+	if _, ok := v["badge_stock"]; ok {
+		t.Fatal("invalid kept")
+	}
+}

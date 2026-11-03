@@ -30,6 +30,12 @@ var storefrontThemeIntRanges = map[string][2]int{
 var storefrontThemeEnums = map[string][]string{
 	"font_family":     {"system", "inter", "pingfang", "serif", "rounded", "mono"},
 	"tag_font_weight": {"normal", "medium", "bold"},
+	// 商品徽章显示开关：show / hide；未配置 = 模板原样
+	"badge_stock":       {"show", "hide"},
+	"badge_fulfillment": {"show", "hide"},
+	"badge_purchase":    {"show", "hide"},
+	"badge_custom":      {"show", "hide"},
+	"badge_sold":        {"show", "hide"},
 }
 
 func normalizeStorefrontThemeItem(raw interface{}) map[string]interface{} {

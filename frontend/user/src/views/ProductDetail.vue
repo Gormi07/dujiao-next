@@ -66,6 +66,7 @@
                     v-for="(tag, index) in product.tags"
                     :key="index"
                     variant="neutral"
+                    data-sf-badge="custom"
                     class="sf-tag"
                   >
                     {{ tag }}
@@ -77,23 +78,23 @@
                 </h1>
 
                 <div class="mb-6 flex flex-wrap items-center gap-2">
-                  <Badge :variant="product.purchase_type === 'guest' ? 'warning' : 'success'">
+                  <Badge data-sf-badge="purchase" :variant="product.purchase_type === 'guest' ? 'warning' : 'success'">
                     <UserPlus v-if="product.purchase_type === 'guest'" class="h-3 w-3" />
                     <Lock v-else class="h-3 w-3" />
                     {{ getPurchaseTypeLabel(product.purchase_type) }}
                   </Badge>
 
-                  <Badge :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
+                  <Badge data-sf-badge="fulfillment" :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'">
                     <Zap v-if="product.fulfillment_type === 'auto'" class="h-3 w-3" />
                     <Pencil v-else class="h-3 w-3" />
                     {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
                   </Badge>
 
-                  <Badge variant="neutral" class="tabular-nums" data-testid="sold-count">
+                  <Badge data-sf-badge="sold" variant="neutral" class="tabular-nums" data-testid="sold-count">
                     {{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}
                   </Badge>
 
-                  <Badge :variant="getStockBadgeVariant(product.stock_status)">
+                  <Badge data-sf-badge="stock" :variant="getStockBadgeVariant(product.stock_status)">
                     {{ getStockStatusLabel(product) }}
                   </Badge>
                 </div>

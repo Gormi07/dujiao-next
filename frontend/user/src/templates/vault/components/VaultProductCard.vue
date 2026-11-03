@@ -9,7 +9,7 @@
         <Package v-else class="relative z-[1] h-[58px] w-[58px] text-white" />
         <!-- 商家标签浮层 -->
         <div v-if="!soldOut && product.tags && product.tags.length" class="absolute right-1.5 top-1.5 z-[3] flex max-w-[80%] flex-wrap justify-end gap-1">
-          <span v-for="(tag, i) in product.tags.slice(0, 2)" :key="i" class="sf-tag inline-flex max-w-full items-center truncate rounded-md border border-white/25 bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">{{ tag }}</span>
+          <span v-for="(tag, i) in product.tags.slice(0, 2)" :key="i" data-sf-badge="custom" class="sf-tag inline-flex max-w-full items-center truncate rounded-md border border-white/25 bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">{{ tag }}</span>
         </div>
       </span>
       <div class="flex min-w-0 flex-col gap-0.5 px-1">
@@ -20,18 +20,19 @@
 
     <!-- 属性徽章：交付方式 · 购买类型 · 库存 -->
     <div class="mx-1 flex flex-wrap items-center gap-1.5">
-      <span class="inline-flex items-center gap-1 rounded-full bg-[color:var(--teal-soft)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--teal-strong)]">
+      <span data-sf-badge="fulfillment" class="inline-flex items-center gap-1 rounded-full bg-[color:var(--teal-soft)] px-2 py-0.5 text-[11px] font-semibold text-[color:var(--teal-strong)]">
         <component :is="product.fulfillment_type === 'auto' ? Zap : Pencil" class="h-3 w-3" />
         {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
       </span>
-      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="product.purchase_type === 'guest' ? 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]' : 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]'">
+      <span data-sf-badge="purchase" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="product.purchase_type === 'guest' ? 'bg-[color:var(--gold-soft)] text-[color:var(--gold-strong)]' : 'bg-[color:var(--teal-soft)] text-[color:var(--teal-strong)]'">
         <component :is="product.purchase_type === 'guest' ? UserPlus : Lock" class="h-3 w-3" />
         {{ getPurchaseTypeLabel(product.purchase_type) }}
       </span>
-      <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="stockPill.tone">
+      <span data-sf-badge="stock" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="stockPill.tone">
         <component :is="stockPill.icon" class="h-3 w-3" />
         {{ stockPill.label }}
       </span>
+      <span v-if="normalizeSoldCount(product) > 0" data-sf-badge="sold" class="sf-sold-optin inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground"><TrendingUp class="h-3 w-3" />{{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}</span>
     </div>
 
     <div class="mt-auto flex items-end justify-between gap-2 px-1">
@@ -66,6 +67,8 @@ import { useI18n } from 'vue-i18n'
 import { AlarmClock, Lock, Package, Pencil, UserPlus, XCircle, Zap } from 'lucide-vue-next'
 import { getFirstImageUrl, getImageUrl } from '../../../utils/image'
 import { useLocalized, useProductLabels } from '../../../composables/useProduct'
+import { normalizeSoldCount } from '../../../utils/soldCount'
+import { TrendingUp } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{ product: any; index?: number }>(), { index: 0 })
 

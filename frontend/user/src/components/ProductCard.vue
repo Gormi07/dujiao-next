@@ -38,7 +38,7 @@
       <div v-if="!isSoldOut(product) && product.tags && product.tags.length > 0"
         class="absolute top-2 right-2 md:top-4 md:right-4 z-20 flex flex-wrap gap-1 md:gap-2 justify-end">
         <span v-for="(tag, tagIndex) in product.tags.slice(0, maxTags)" :key="tagIndex"
-          class="sf-tag inline-flex items-center rounded-md border border-white/25 bg-black/55 px-2 md:px-3 py-0.5 md:py-1 text-xs font-medium text-white backdrop-blur-sm">
+          data-sf-badge="custom" class="sf-tag inline-flex items-center rounded-md border border-white/25 bg-black/55 px-2 md:px-3 py-0.5 md:py-1 text-xs font-medium text-white backdrop-blur-sm">
           {{ tag }}
         </span>
       </div>
@@ -56,7 +56,7 @@
       <!-- Badges -->
       <div class="mb-2 md:mb-3 flex flex-wrap items-center gap-1 md:gap-2">
         <!-- Mobile: show only fulfillment type badge -->
-        <Badge
+        <Badge data-sf-badge="fulfillment"
           class="md:hidden"
           size="xs"
           :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'"
@@ -65,7 +65,7 @@
         </Badge>
 
         <!-- Desktop: show all badges -->
-        <Badge
+        <Badge data-sf-badge="purchase"
           class="hidden md:inline-flex"
           size="xs"
           :variant="product.purchase_type === 'guest' ? 'warning' : 'success'"
@@ -75,7 +75,7 @@
           {{ getPurchaseTypeLabel(product.purchase_type) }}
         </Badge>
 
-        <Badge
+        <Badge data-sf-badge="fulfillment"
           class="hidden md:inline-flex"
           size="xs"
           :variant="product.fulfillment_type === 'auto' ? 'info' : 'neutral'"
@@ -85,8 +85,11 @@
           {{ getFulfillmentTypeLabel(product.fulfillment_type) }}
         </Badge>
 
-        <Badge class="hidden md:inline-flex" size="xs" :variant="getStockBadgeVariant(product.stock_status)">
+        <Badge data-sf-badge="stock" class="hidden md:inline-flex" size="xs" :variant="getStockBadgeVariant(product.stock_status)">
           {{ getStockStatusLabel(product) }}
+        </Badge>
+        <Badge v-if="normalizeSoldCount(product) > 0" data-sf-badge="sold" class="sf-sold-optin tabular-nums" size="xs" variant="neutral">
+          {{ t('products.soldCount', { count: normalizeSoldCount(product) }) }}
         </Badge>
       </div>
 
@@ -167,6 +170,7 @@ import { computed, ref, watch } from 'vue'
 import { ArrowRight, ChevronRight, Image as ImageIcon, Lock, Pencil, ShoppingCart, UserPlus, Zap } from 'lucide-vue-next'
 import { getFirstImageUrl, getImageUrl } from '../utils/image'
 import { useLocalized, useProductLabels } from '../composables/useProduct'
+import { normalizeSoldCount } from '../utils/soldCount'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'

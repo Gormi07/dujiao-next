@@ -16,6 +16,11 @@ export type StorefrontThemeItem = Partial<{
   tag_radius: number
   tag_font_size: number
   tag_font_weight: string
+  badge_stock: string
+  badge_fulfillment: string
+  badge_purchase: string
+  badge_custom: string
+  badge_sold: string
 }>
 
 const COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/
@@ -103,6 +108,12 @@ export const buildStorefrontThemeCss = (template: 'classic' | 'vault', raw: unkn
   const weight = typeof t.tag_font_weight === 'string' ? WEIGHTS[t.tag_font_weight] : undefined
   if (weight) tag.push(`font-weight: ${weight} !important`)
   if (tag.length) rules.push(`html body .sf-tag.sf-tag { ${tag.join('; ')}; }`)
+  // 商品徽章显示/隐藏（data-sf-badge），已售为可选开启（.sf-sold-optin 默认隐藏，且销量为 0 时不渲染）
+  for (const key of ['stock', 'fulfillment', 'purchase', 'custom', 'sold']) {
+    const v = t[`badge_${key}`]
+    if (v === 'hide') rules.push(`html body [data-sf-badge="${key}"] { display: none !important; }`)
+    else if (v === 'show' && key === 'sold') rules.push('html body .sf-sold-optin.sf-sold-optin { display: inline-flex !important; }')
+  }
 
   const out: string[] = []
   if (vars.length) out.push(`${scope} { ${vars.join('; ')}; }`)
