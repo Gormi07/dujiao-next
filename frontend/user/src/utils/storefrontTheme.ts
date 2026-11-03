@@ -106,7 +106,13 @@ export const buildStorefrontThemeCss = (template: 'classic' | 'vault', raw: unkn
 
   const out: string[] = []
   if (vars.length) out.push(`${scope} { ${vars.join('; ')}; }`)
-  return out.concat(rules).join('\n')
+  // style.css 在 @layer utilities 里用 !important 改写了 .rounded-*；分层的 !important 优先于未分层的，
+  // 所以带 !important 的规则必须放进同一层，再靠更高的选择器权重胜出。普通声明保持不分层。
+  const important = rules.filter((r) => r.includes('!important'))
+  const plain = rules.filter((r) => !r.includes('!important'))
+  out.push(...plain)
+  if (important.length) out.push(`@layer utilities {\n${important.join('\n')}\n}`)
+  return out.join('\n')
 }
 
 const STYLE_ID = 'storefront-theme-overrides'
