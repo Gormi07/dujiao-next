@@ -58,7 +58,7 @@
           </div>
 
           <div v-if="product.tags && product.tags.length" class="mb-1 flex flex-wrap gap-1.5">
-            <span v-for="(tag, i) in product.tags" :key="i" class="inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[12.5px] font-semibold text-muted-foreground">{{ tag }}</span>
+            <span v-for="(tag, i) in product.tags" :key="i" class="sf-tag inline-flex items-center rounded-full bg-secondary px-2.5 py-1 text-[12.5px] font-semibold text-muted-foreground">{{ tag }}</span>
           </div>
 
           <!-- 价格 -->

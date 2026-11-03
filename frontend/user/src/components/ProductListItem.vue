@@ -1,6 +1,6 @@
 <template>
   <Card
-    class="group relative overflow-hidden flex flex-row items-center rounded-xl transition-all cursor-pointer theme-slide-up"
+    class="sf-card group relative overflow-hidden flex flex-row items-center rounded-xl transition-all cursor-pointer theme-slide-up"
     :class="isSoldOut(product)
       ? 'opacity-85 grayscale-[0.25] saturate-50 border-destructive/30'
       : 'hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md'"
@@ -38,7 +38,7 @@
           {{ getLocalizedText(product.title) }}
         </h3>
         <span v-for="(tag, tagIndex) in (product.tags || []).slice(0, 1)" :key="tagIndex"
-          class="hidden md:inline-flex items-center rounded-md border border-white/25 bg-black/55 px-1.5 py-0 text-[10px] font-medium text-white backdrop-blur-sm flex-shrink-0">
+          class="sf-tag hidden md:inline-flex items-center rounded-md border border-white/25 bg-black/55 px-1.5 py-0 text-[10px] font-medium text-white backdrop-blur-sm flex-shrink-0">
           {{ tag }}
         </span>
       </div>

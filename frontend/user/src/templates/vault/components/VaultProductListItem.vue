@@ -1,7 +1,7 @@
 <template>
   <RouterLink
     :to="`/products/${product.slug}`"
-    class="group flex items-center gap-3 rounded-lg border bg-card p-2.5 transition hover:border-hairline-strong hover:shadow-[var(--shadow-sm)] sm:gap-3.5 sm:p-3"
+    class="sf-card group flex items-center gap-3 rounded-lg border bg-card p-2.5 transition hover:border-hairline-strong hover:shadow-[var(--shadow-sm)] sm:gap-3.5 sm:p-3"
     :class="{ 'opacity-[0.74]': soldOut }"
   >
     <!-- Thumbnail -->
@@ -36,7 +36,7 @@
         </span>
         <span v-if="priceSignal" class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="priceSignal.tone">{{ priceSignal.label }}</span>
         <template v-if="!soldOut && product.tags && product.tags.length">
-          <span v-for="(tag, i) in product.tags.slice(0, 2)" :key="i" class="inline-flex max-w-[120px] items-center truncate rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{{ tag }}</span>
+          <span v-for="(tag, i) in product.tags.slice(0, 2)" :key="i" class="sf-tag inline-flex max-w-[120px] items-center truncate rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{{ tag }}</span>
         </template>
       </div>
     </div>

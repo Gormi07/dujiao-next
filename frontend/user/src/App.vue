@@ -42,6 +42,7 @@ import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from './stores/app'
 import { getActiveTemplate, hasTemplateHint, rememberTemplate } from './templates/registry'
+import { applyStorefrontTheme } from './utils/storefrontTheme'
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
 import Loading from './components/Loading.vue'
@@ -70,6 +71,12 @@ if (!shellReady.value) {
   void useRouter().isReady().catch(() => {}).finally(() => { shellReady.value = true })
 }
 watch(() => appStore.config?.storefront_template, (value) => rememberTemplate(value), { immediate: true })
+// 店面外观配置（后台「模板配置 → 外观配置」），按当前模板注入 CSS 变量；未配置时不注入
+watch(
+  () => [getActiveTemplate(), (appStore.config as Record<string, unknown> | null | undefined)?.storefront_theme, isResellerConsole.value] as const,
+  ([tpl, theme, console]) => applyStorefrontTheme(tpl, theme, !console),
+  { immediate: true, deep: true },
+)
 </script>
 
 <style>

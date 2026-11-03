@@ -23,6 +23,7 @@ import SettingsOrderEmailTemplateTab from './components/SettingsOrderEmailTempla
 import SettingsNavigationTab from './components/SettingsNavigationTab.vue'
 import SettingsHomeAnnouncementTab from './components/SettingsHomeAnnouncementTab.vue'
 import SettingsUpstreamSyncTab from './components/SettingsUpstreamSyncTab.vue'
+import StorefrontThemeDialog, { type ThemeItem } from './components/StorefrontThemeDialog.vue'
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -222,7 +223,27 @@ const form = reactive({
   footer_links: [] as FooterLinkItem[],
   storefront_template: 'classic' as 'classic' | 'vault',
   template_mode: 'card' as 'card' | 'list',
+  storefront_theme: {} as Partial<Record<'classic' | 'vault', ThemeItem>>,
 })
+
+// 店面外观配置弹窗
+const themeDialogOpen = ref(false)
+const themeDialogTemplate = ref<'classic' | 'vault'>('classic')
+const openThemeDialog = (tpl: 'classic' | 'vault') => {
+  themeDialogTemplate.value = tpl
+  themeDialogOpen.value = true
+}
+const themeItemCount = (tpl: 'classic' | 'vault') => Object.keys(form.storefront_theme[tpl] || {}).length
+const normalizeStorefrontThemeForm = (raw: unknown): Partial<Record<'classic' | 'vault', ThemeItem>> => {
+  const out: Partial<Record<'classic' | 'vault', ThemeItem>> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const tpl of ['classic', 'vault'] as const) {
+    const item = (raw as Record<string, unknown>)[tpl]
+    if (item && typeof item === 'object' && Object.keys(item).length) out[tpl] = { ...(item as ThemeItem) }
+  }
+  return out
+}
+
 
 const smtpData = reactive({
   enabled: false,
@@ -460,6 +481,7 @@ const fetchSettings = async () => {
 
       const rawStorefrontTemplate = String(data.storefront_template || 'classic').trim()
       form.storefront_template = rawStorefrontTemplate === 'vault' ? 'vault' : 'classic'
+      form.storefront_theme = normalizeStorefrontThemeForm(data.storefront_theme)
     }
 
     if (orderRes.data && orderRes.data.data) {
@@ -622,6 +644,7 @@ const saveSiteSettings = async () => {
       footer_links: form.footer_links,
       storefront_template: form.storefront_template,
       template_mode: form.template_mode,
+      storefront_theme: form.storefront_theme,
     },
   }
   await adminAPI.updateSettings(payload)
@@ -807,6 +830,15 @@ const saveSettings = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const applyThemeAndSave = async (item: ThemeItem) => {
+  const next = { ...form.storefront_theme }
+  if (Object.keys(item).length) next[themeDialogTemplate.value] = item
+  else delete next[themeDialogTemplate.value]
+  form.storefront_theme = next
+  await saveSettings()
+  themeDialogOpen.value = false
 }
 
 onMounted(() => {
@@ -1169,6 +1201,15 @@ onMounted(() => {
                 <div class="font-semibold" :class="form.storefront_template === 'classic' ? 'text-primary' : ''">{{ t('admin.settings.template.classicMode') }}</div>
                 <div class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.template.classicModeDesc') }}</div>
               </div>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                data-testid="theme-open-classic"
+                @click.stop.prevent="openThemeDialog('classic')"
+              >
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></svg>
+                {{ t('admin.settings.template.appearance') }}<span v-if="themeItemCount('classic')" class="rounded-full bg-primary/10 px-1.5 text-primary">{{ themeItemCount('classic') }}</span>
+              </button>
               <div v-if="form.storefront_template === 'classic'" class="absolute right-3 top-3">
                 <svg class="h-5 w-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
@@ -1195,6 +1236,15 @@ onMounted(() => {
                 <div class="font-semibold" :class="form.storefront_template === 'vault' ? 'text-primary' : ''">{{ t('admin.settings.template.vaultMode') }}</div>
                 <div class="mt-1 text-xs text-muted-foreground">{{ t('admin.settings.template.vaultModeDesc') }}</div>
               </div>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
+                data-testid="theme-open-vault"
+                @click.stop.prevent="openThemeDialog('vault')"
+              >
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></svg>
+                {{ t('admin.settings.template.appearance') }}<span v-if="themeItemCount('vault')" class="rounded-full bg-primary/10 px-1.5 text-primary">{{ themeItemCount('vault') }}</span>
+              </button>
               <div v-if="form.storefront_template === 'vault'" class="absolute right-3 top-3">
                 <svg class="h-5 w-5 text-primary" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
@@ -1204,6 +1254,14 @@ onMounted(() => {
           </RadioGroup>
         </div>
       </div>
+
+      <StorefrontThemeDialog
+        v-model:open="themeDialogOpen"
+        :template="themeDialogTemplate"
+        :model-value="form.storefront_theme[themeDialogTemplate]"
+        :saving="loading"
+        @apply="applyThemeAndSave"
+      />
 
       <!-- Product layout: card / list -->
       <div class="rounded-xl border border-border bg-card">

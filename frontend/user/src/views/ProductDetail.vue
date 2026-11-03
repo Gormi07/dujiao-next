@@ -66,6 +66,7 @@
                     v-for="(tag, index) in product.tags"
                     :key="index"
                     variant="neutral"
+                    class="sf-tag"
                   >
                     {{ tag }}
                   </Badge>
