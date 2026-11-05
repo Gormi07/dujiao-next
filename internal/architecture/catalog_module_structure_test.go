@@ -313,7 +313,7 @@ func TestCatalogMappingImplementationLivesInBoundedContext(t *testing.T) {
 		"markUpstreamUnavailable", "computeFullSyncInterval",
 	})
 	assertFileDeclaresFunctions(t, filepath.Join(applicationRoot, "markup.go"), []string{
-		"ReapplyMarkup", "recalcProductPrice",
+		"ReapplyMarkup", "UpdateMarkup", "recalcProductPrice",
 	})
 	assertFileDeclaresFunctions(t, filepath.Join(applicationRoot, "pricing.go"), []string{
 		"CalculateLocalPrice", "CalculateMarkedUpPrice", "convertCurrency",

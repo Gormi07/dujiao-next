@@ -267,6 +267,7 @@ func (s *Service) importUpstreamProduct(connectionID uint, upstreamProductID uin
 			UpstreamProductID:       upstreamProductID,
 			UpstreamFulfillmentType: upstreamFulfillmentType,
 			IsActive:                true,
+			MarkupMode:              mappingdomain.MarkupModeInherit,
 			LastSyncedAt:            &now,
 		}
 		if err := repos.Mappings.Create(mapping); err != nil {

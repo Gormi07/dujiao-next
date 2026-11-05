@@ -38,6 +38,12 @@ const syncingId = ref<number | null>(null)
 // Expand detail
 const expandedMappingId = ref<number | null>(null)
 const detailLoading = ref(false)
+const markupSaving = ref(false)
+const markupForm = reactive({
+  markup_mode: 'inherit' as string,
+  markup_percent: '0',
+})
+
 
 interface SkuMapping {
   local_sku_id: number
@@ -174,13 +180,64 @@ const toggleMappingExpand = async (mapping: AdminProductMapping & { product?: Ad
   expandedMappingId.value = mapping.id
   detailLoading.value = true
   detailData.value = null
+  initMarkupForm(mapping)
   try {
     const res = await adminAPI.getProductMapping(mapping.id)
     detailData.value = res.data.data as unknown as MappingDetail
+    const m = detailData.value?.mapping
+    if (m) initMarkupForm(m)
   } catch {
     detailData.value = null
   } finally {
     detailLoading.value = false
+  }
+}
+
+const initMarkupForm = (mapping: { markup_mode?: string; markup_percent?: number | string }) => {
+  markupForm.markup_mode = mapping.markup_mode === 'markup_percent' ? 'markup_percent' : 'inherit'
+  const pct = mapping.markup_percent
+  if (pct === undefined || pct === null || pct === '') {
+    markupForm.markup_percent = '0'
+  } else {
+    markupForm.markup_percent = String(pct)
+  }
+}
+
+const getConnectionMarkupPercent = (connectionId: number): string => {
+  const conn = connections.value.find((c) => c.id === connectionId)
+  const v = conn?.price_markup_percent
+  if (v === undefined || v === null) return '0'
+  return String(v)
+}
+
+const handleSaveMarkup = async (mapping: AdminProductMapping & { product?: AdminProduct }) => {
+  markupSaving.value = true
+  try {
+    await adminAPI.updateProductMappingMarkup(mapping.id, {
+      markup_mode: markupForm.markup_mode,
+      markup_percent: markupForm.markup_mode === 'markup_percent' ? markupForm.markup_percent : '0',
+    })
+    notifySuccess(t('productMappings.detail.markupSaved'))
+    const page = pagination.page
+    await fetchMappings(page, { preserveRows: true })
+    const refreshed = mappings.value.find((m) => m.id === mapping.id)
+    if (refreshed) {
+      expandedMappingId.value = refreshed.id
+      initMarkupForm(refreshed)
+      detailLoading.value = true
+      try {
+        const res = await adminAPI.getProductMapping(refreshed.id)
+        detailData.value = res.data.data as unknown as MappingDetail
+      } catch {
+        detailData.value = null
+      } finally {
+        detailLoading.value = false
+      }
+    }
+  } catch (err: any) {
+    notifyError(err?.response?.data?.message || err?.message)
+  } finally {
+    markupSaving.value = false
   }
 }
 
@@ -845,6 +902,12 @@ onMounted(() => { fetchConnections(); fetchCategories(); fetchMappings() })
               >
                 {{ t('productMappings.upstreamStatus.deleted') }}
               </span>
+              <span
+                v-if="mapping.markup_mode === 'markup_percent'"
+                class="shrink-0 inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] text-blue-700"
+              >
+                {{ t('productMappings.detail.markupOverrideBadge') }} +{{ mapping.markup_percent }}%
+              </span>
             </div>
             <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span>{{ t('productMappings.columns.connection') }}: <span class="text-foreground">{{ getConnectionName(mapping.connection_id) }}</span></span>
@@ -876,6 +939,59 @@ onMounted(() => { fetchConnections(); fetchCategories(); fetchMappings() })
             {{ t('productMappings.detail.loadFailed') }}
           </div>
           <div v-else class="px-5 py-4">
+            <!-- Per-mapping markup -->
+            <div class="mb-5 rounded-xl border border-border bg-background p-4 shadow-sm">
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {{ t('productMappings.detail.markupSection') }}
+                </h4>
+                <p class="text-xs text-muted-foreground">
+                  {{ t('productMappings.detail.markupEffective') }}:
+                  <span class="font-mono text-foreground">
+                    <template v-if="markupForm.markup_mode === 'markup_percent'">+{{ markupForm.markup_percent }}%</template>
+                    <template v-else>+{{ getConnectionMarkupPercent(mapping.connection_id) }}%</template>
+                  </span>
+                  <span v-if="markupForm.markup_mode !== 'markup_percent'" class="ml-1">
+                    ({{ t('productMappings.detail.markupConnectionHint', { percent: getConnectionMarkupPercent(mapping.connection_id) }) }})
+                  </span>
+                </p>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                <div>
+                  <Label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('productMappings.detail.markupMode') }}</Label>
+                  <Select v-model="markupForm.markup_mode">
+                    <SelectTrigger class="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inherit">{{ t('productMappings.detail.markupModeInherit') }}</SelectItem>
+                      <SelectItem value="markup_percent">{{ t('productMappings.detail.markupModePercent') }}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label class="mb-1.5 block text-xs font-medium text-muted-foreground">{{ t('productMappings.detail.markupPercent') }}</Label>
+                  <Input
+                    v-model="markupForm.markup_percent"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    class="h-9 font-mono"
+                    :disabled="markupForm.markup_mode !== 'markup_percent'"
+                  />
+                  <p class="mt-1 text-[11px] text-muted-foreground">{{ t('productMappings.detail.markupPercentHint') }}</p>
+                </div>
+                <Button
+                  size="sm"
+                  class="h-9 w-full sm:w-auto"
+                  :disabled="markupSaving"
+                  @click="handleSaveMarkup(mapping)"
+                >
+                  {{ markupSaving ? '...' : t('productMappings.detail.markupSave') }}
+                </Button>
+              </div>
+            </div>
+
             <!-- SKU comparison table -->
             <h4 class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {{ t('productMappings.detail.skuComparison') }}

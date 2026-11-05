@@ -78,3 +78,54 @@ func TestCalculateLocalPrice(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveEffectiveMarkupPercent(t *testing.T) {
+	tests := []struct {
+		name         string
+		mode         string
+		itemPercent  string
+		connPercent  string
+		wantPercent  string
+	}{
+		{"inherit uses connection percent", "inherit", "50", "120", "120"},
+		{"empty mode treated as inherit", "", "50", "120", "120"},
+		{"markup_percent uses item percent", "markup_percent", "50", "120", "50"},
+		{"markup_percent zero overrides connection", "markup_percent", "0", "120", "0"},
+		{"unknown mode falls back to inherit", "fixed_markup", "30", "80", "80"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			item := decimal.RequireFromString(tt.itemPercent)
+			conn := decimal.RequireFromString(tt.connPercent)
+			want := decimal.RequireFromString(tt.wantPercent)
+
+			got := ResolveEffectiveMarkupPercent(tt.mode, item, conn)
+			if !got.Equal(want) {
+				t.Errorf("ResolveEffectiveMarkupPercent(%q, %s, %s) = %s, want %s",
+					tt.mode, tt.itemPercent, tt.connPercent, got.String(), tt.wantPercent)
+			}
+		})
+	}
+}
+
+func TestCalculateLocalPriceUsesResolvedMarkup(t *testing.T) {
+	upstream := decimal.RequireFromString("10.00")
+	rate := decimal.RequireFromString("1")
+	connMarkup := decimal.RequireFromString("120")
+	itemMarkup := decimal.RequireFromString("50")
+
+	effective := ResolveEffectiveMarkupPercent("markup_percent", itemMarkup, connMarkup)
+	got := CalculateLocalPrice(upstream, rate, effective, "none")
+	want := decimal.RequireFromString("15.00") // 10 * (1+50/100)
+	if !got.Equal(want) {
+		t.Fatalf("item override price = %s, want %s (connection would be 22.00)", got.String(), want.String())
+	}
+
+	effectiveInherit := ResolveEffectiveMarkupPercent("inherit", itemMarkup, connMarkup)
+	gotInherit := CalculateLocalPrice(upstream, rate, effectiveInherit, "none")
+	wantInherit := decimal.RequireFromString("22.00") // 10 * (1+120/100)
+	if !gotInherit.Equal(wantInherit) {
+		t.Fatalf("inherit price = %s, want %s", gotInherit.String(), wantInherit.String())
+	}
+}

@@ -582,6 +582,8 @@ export interface AdminSiteConnection {
 // --- ProductMapping ---
 export type UpstreamProductStatus = 'active' | 'inactive' | 'deleted'
 
+export type ProductMappingMarkupMode = 'inherit' | 'markup_percent'
+
 export interface AdminProductMapping {
   id: number
   connection_id: number
@@ -593,6 +595,8 @@ export interface AdminProductMapping {
   upstream_price: number
   upstream_currency: string
   is_active: boolean
+  markup_mode?: ProductMappingMarkupMode | string
+  markup_percent?: number | string
   upstream_status?: UpstreamProductStatus
   last_sync_at?: string
   created_at: string

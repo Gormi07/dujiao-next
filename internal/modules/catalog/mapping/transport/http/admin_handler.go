@@ -14,6 +14,7 @@ import (
 	"github.com/dujiao-next/internal/upstream"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 )
 
 // ProductMappingService 是后台商品映射端点所需的最小用例接口。
@@ -31,6 +32,7 @@ type ProductMappingService interface {
 	ListUpstreamCategories(connectionID uint) ([]upstream.UpstreamCategory, bool, error)
 	ListUpstreamCategoryCounts(ctx context.Context, connectionID uint) (map[uint]int, int, error)
 	BatchImportByCategory(connectionID, upstreamCategoryID uint, autoCreateCategory bool, localCategoryID uint) (*mappingapp.BatchImportByCategoryResult, error)
+	UpdateMarkup(mappingID uint, mode string, markupPercent decimal.Decimal) (*mappingdomain.Mapping, error)
 }
 
 // AdminHandler 处理后台商品映射管理请求。
@@ -485,4 +487,58 @@ func (h *AdminHandler) BatchImportByCategory(c *gin.Context) {
 	}
 
 	response.Success(c, result)
+}
+
+// UpdateProductMappingMarkupRequest 更新映射加价请求
+type UpdateProductMappingMarkupRequest struct {
+	MarkupMode    string `json:"markup_mode" binding:"required"`
+	MarkupPercent string `json:"markup_percent"`
+}
+
+// UpdateProductMappingMarkup 更新单个映射的加价并立即重算本地售价
+func (h *AdminHandler) UpdateProductMappingMarkup(c *gin.Context) {
+	id, err := ginutil.ParseParamUint(c, "id")
+	if err != nil {
+		ginutil.RespondError(c, response.CodeBadRequest, "error.bad_request", err)
+		return
+	}
+
+	var req UpdateProductMappingMarkupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		ginutil.RespondBindError(c, err)
+		return
+	}
+
+	percent := decimal.Zero
+	if req.MarkupPercent != "" {
+		parsed, err := decimal.NewFromString(req.MarkupPercent)
+		if err != nil {
+			ginutil.RespondError(c, response.CodeBadRequest, "error.invalid_markup_percent", err)
+			return
+		}
+		percent = parsed
+	}
+
+	mapping, err := h.service.UpdateMarkup(id, req.MarkupMode, percent)
+	if err != nil {
+		if errors.Is(err, mappingcontract.ErrMappingNotFound) {
+			ginutil.RespondError(c, response.CodeNotFound, "error.mapping_not_found", nil)
+			return
+		}
+		if errors.Is(err, mappingcontract.ErrInvalidMarkupMode) {
+			ginutil.RespondError(c, response.CodeBadRequest, "error.invalid_markup_mode", nil)
+			return
+		}
+		if errors.Is(err, mappingcontract.ErrInvalidMarkupPercent) {
+			ginutil.RespondError(c, response.CodeBadRequest, "error.invalid_markup_percent", nil)
+			return
+		}
+		if errors.Is(err, siteconnectioncontract.ErrNotFound) {
+			ginutil.RespondError(c, response.CodeNotFound, "error.connection_not_found", nil)
+			return
+		}
+		ginutil.RespondError(c, response.CodeInternal, "error.mapping_update_failed", err)
+		return
+	}
+	response.Success(c, mapping)
 }

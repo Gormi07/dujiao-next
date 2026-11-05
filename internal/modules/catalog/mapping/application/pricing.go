@@ -1,6 +1,10 @@
 package application
 
-import "github.com/shopspring/decimal"
+import (
+	mappingdomain "github.com/dujiao-next/internal/modules/catalog/mapping/domain"
+
+	"github.com/shopspring/decimal"
+)
 
 var (
 	hundred    = decimal.NewFromInt(100)
@@ -62,4 +66,13 @@ func CalculateMarkedUpPrice(upstreamPrice, markupPercent decimal.Decimal, roundi
 	default:
 		return result.Round(roundScale)
 	}
+}
+
+// ResolveEffectiveMarkupPercent 按映射加价模式解析实际使用的加价百分比。
+// inherit / 空 / 未知模式 → 连接统一加价；markup_percent → 单品加价百分比。
+func ResolveEffectiveMarkupPercent(mode string, itemPercent, connectionPercent decimal.Decimal) decimal.Decimal {
+	if mode == mappingdomain.MarkupModePercent {
+		return itemPercent
+	}
+	return connectionPercent
 }

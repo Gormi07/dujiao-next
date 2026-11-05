@@ -609,6 +609,7 @@ export const adminAPI = {
   batchImportUpstreamProducts: (data: Record<string, unknown>) => api.post('/admin/product-mappings/batch-import', data),
   syncProductMapping: (id: number) => api.post(`/admin/product-mappings/${id}/sync`),
   updateProductMappingStatus: (id: number, data: { is_active: boolean }) => api.put(`/admin/product-mappings/${id}/status`, data),
+  updateProductMappingMarkup: (id: number, data: { markup_mode: string; markup_percent?: string }) => api.put(`/admin/product-mappings/${id}/markup`, data),
   deleteProductMapping: (id: number) => api.delete(`/admin/product-mappings/${id}`),
   batchSyncProductMappings: (ids: number[]) => api.post('/admin/product-mappings/batch-sync', { ids }),
   batchUpdateProductMappingStatus: (ids: number[], isActive: boolean) => api.post('/admin/product-mappings/batch-status', { ids, is_active: isActive }),

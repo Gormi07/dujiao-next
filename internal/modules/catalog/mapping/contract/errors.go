@@ -10,4 +10,6 @@ var (
 	ErrMediaRecorderRequired     = errors.New("product mapping media recorder is required")
 	ErrUpstreamStockInsufficient = errors.New("upstream stock insufficient")
 	ErrBatchImportInProgress     = errors.New("batch import already running for this connection")
+	ErrInvalidMarkupMode         = errors.New("invalid markup mode")
+	ErrInvalidMarkupPercent      = errors.New("markup percent must be >= 0")
 )

@@ -3,6 +3,8 @@ package domain
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	productdomain "github.com/dujiao-next/internal/modules/catalog/product/domain"
 	siteconnectiondomain "github.com/dujiao-next/internal/modules/siteconnection/domain"
 	"github.com/dujiao-next/internal/shared/money"
@@ -15,19 +17,27 @@ const (
 	UpstreamStatusDeleted  = "deleted"  // 上游已删除（软删），不再存在
 )
 
+// 映射加价模式（Mapping.MarkupMode）
+const (
+	MarkupModeInherit = "inherit"        // 跟随对接站点统一加价
+	MarkupModePercent = "markup_percent" // 本映射单独按比例加价
+)
+
 // Mapping 表示一个本地商品与上游商品之间的映射。
 type Mapping struct {
-	ID                      uint       `gorm:"primarykey" json:"id"`
-	ConnectionID            uint       `gorm:"index;not null" json:"connection_id"`
-	LocalProductID          uint       `gorm:"uniqueIndex;not null" json:"local_product_id"`
-	UpstreamProductID       uint       `gorm:"not null" json:"upstream_product_id"`
-	UpstreamFulfillmentType string     `gorm:"type:varchar(20);not null;default:'manual'" json:"upstream_fulfillment_type"` // 上游原始交付类型（auto/manual）
-	UpstreamStatus          string     `gorm:"type:varchar(16);not null;default:'active';index" json:"upstream_status"`     // 上游商品状态：active/inactive/deleted
-	IsActive                bool       `gorm:"not null;default:true" json:"is_active"`
-	LastSyncedAt            *time.Time `json:"last_synced_at,omitempty"`
-	CreatedAt               time.Time  `gorm:"index" json:"created_at"`
-	UpdatedAt               time.Time  `gorm:"index" json:"updated_at"`
-	DeletedAt               *time.Time `gorm:"index" json:"-"`
+	ID                      uint            `gorm:"primarykey" json:"id"`
+	ConnectionID            uint            `gorm:"index;not null" json:"connection_id"`
+	LocalProductID          uint            `gorm:"uniqueIndex;not null" json:"local_product_id"`
+	UpstreamProductID       uint            `gorm:"not null" json:"upstream_product_id"`
+	UpstreamFulfillmentType string          `gorm:"type:varchar(20);not null;default:'manual'" json:"upstream_fulfillment_type"` // 上游原始交付类型（auto/manual）
+	UpstreamStatus          string          `gorm:"type:varchar(16);not null;default:'active';index" json:"upstream_status"`     // 上游商品状态：active/inactive/deleted
+	IsActive                bool            `gorm:"not null;default:true" json:"is_active"`
+	MarkupMode              string          `gorm:"type:varchar(32);not null;default:'inherit'" json:"markup_mode"` // inherit / markup_percent
+	MarkupPercent           decimal.Decimal `gorm:"type:decimal(10,4);not null;default:0" json:"markup_percent"`    // mode=markup_percent 时生效
+	LastSyncedAt            *time.Time      `json:"last_synced_at,omitempty"`
+	CreatedAt               time.Time       `gorm:"index" json:"created_at"`
+	UpdatedAt               time.Time       `gorm:"index" json:"updated_at"`
+	DeletedAt               *time.Time      `gorm:"index" json:"-"`
 
 	Connection *siteconnectiondomain.Connection `gorm:"foreignKey:ConnectionID" json:"connection,omitempty"`
 	Product    *productdomain.Product           `gorm:"foreignKey:LocalProductID" json:"product,omitempty"`

@@ -144,7 +144,8 @@ func (s *Service) SyncProduct(mappingID uint) error {
 			localSKU.IsActive = upSKU.IsActive
 			// 如果启用了自动同步价格，按加价比例更新本地售价和成本价
 			if conn.AutoSyncPrice {
-				newLocalPrice := CalculateLocalPrice(upPrice, conn.ExchangeRate, conn.PriceMarkupPercent, conn.PriceRoundingMode)
+				effectiveMarkup := ResolveEffectiveMarkupPercent(mapping.MarkupMode, mapping.MarkupPercent, conn.PriceMarkupPercent)
+				newLocalPrice := CalculateLocalPrice(upPrice, conn.ExchangeRate, effectiveMarkup, conn.PriceRoundingMode)
 				localSKU.PriceAmount = money.FromDecimal(newLocalPrice.Round(2))
 				localSKU.CostPriceAmount = money.FromDecimal(convertCurrency(upPrice, conn.ExchangeRate).Round(2))
 			}
@@ -159,7 +160,8 @@ func (s *Service) SyncProduct(mappingID uint) error {
 		}
 
 		skuPrice, _ := decimal.NewFromString(upSKU.PriceAmount)
-		localPrice := CalculateLocalPrice(skuPrice, conn.ExchangeRate, conn.PriceMarkupPercent, conn.PriceRoundingMode)
+		effectiveMarkup := ResolveEffectiveMarkupPercent(mapping.MarkupMode, mapping.MarkupPercent, conn.PriceMarkupPercent)
+		localPrice := CalculateLocalPrice(skuPrice, conn.ExchangeRate, effectiveMarkup, conn.PriceRoundingMode)
 		newLocalSKU := productdomain.ProductSKU{
 			ProductID:       mapping.LocalProductID,
 			SKUCode:         upSKU.SKUCode,
@@ -226,10 +228,11 @@ func (s *Service) syncUpstreamWholesalePrices(mapping *mappingdomain.Mapping, lo
 	if err != nil {
 		return err
 	}
+	effectiveMarkup := ResolveEffectiveMarkupPercent(mapping.MarkupMode, mapping.MarkupPercent, conn.PriceMarkupPercent)
 	wholesalePrices := convertUpstreamWholesalePrices(
 		upProduct.WholesalePrices,
 		conn.ExchangeRate,
-		conn.PriceMarkupPercent,
+		effectiveMarkup,
 		conn.PriceRoundingMode,
 		buildUpstreamWholesaleSKUIndex(localSKUs, upProduct.SKUs, skuMappings),
 	)
@@ -689,7 +692,8 @@ func (s *Service) syncProductFromData(mapping *mappingdomain.Mapping, conn *site
 			localSKU.SpecValuesJSON = upSKU.SpecValues
 			localSKU.IsActive = upSKU.IsActive
 			if conn.AutoSyncPrice {
-				newLocalPrice := CalculateLocalPrice(upPrice, conn.ExchangeRate, conn.PriceMarkupPercent, conn.PriceRoundingMode)
+				effectiveMarkup := ResolveEffectiveMarkupPercent(mapping.MarkupMode, mapping.MarkupPercent, conn.PriceMarkupPercent)
+				newLocalPrice := CalculateLocalPrice(upPrice, conn.ExchangeRate, effectiveMarkup, conn.PriceRoundingMode)
 				localSKU.PriceAmount = money.FromDecimal(newLocalPrice.Round(2))
 				localSKU.CostPriceAmount = money.FromDecimal(convertCurrency(upPrice, conn.ExchangeRate).Round(2))
 			}
@@ -711,7 +715,8 @@ func (s *Service) syncProductFromData(mapping *mappingdomain.Mapping, conn *site
 			)
 			continue
 		}
-		localPrice := CalculateLocalPrice(skuPrice, conn.ExchangeRate, conn.PriceMarkupPercent, conn.PriceRoundingMode)
+		effectiveMarkup := ResolveEffectiveMarkupPercent(mapping.MarkupMode, mapping.MarkupPercent, conn.PriceMarkupPercent)
+		localPrice := CalculateLocalPrice(skuPrice, conn.ExchangeRate, effectiveMarkup, conn.PriceRoundingMode)
 		newLocalSKU := productdomain.ProductSKU{
 			ProductID:       mapping.LocalProductID,
 			SKUCode:         upSKU.SKUCode,
