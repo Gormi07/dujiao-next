@@ -3,6 +3,7 @@ package mappinghttp
 import (
 	"context"
 	"errors"
+	"strings"
 
 	mappingapp "github.com/dujiao-next/internal/modules/catalog/mapping/application"
 	mappingcontract "github.com/dujiao-next/internal/modules/catalog/mapping/contract"
@@ -491,8 +492,8 @@ func (h *AdminHandler) BatchImportByCategory(c *gin.Context) {
 
 // UpdateProductMappingMarkupRequest 更新映射加价请求
 type UpdateProductMappingMarkupRequest struct {
-	MarkupMode    string `json:"markup_mode" binding:"required"`
-	MarkupPercent string `json:"markup_percent"`
+	MarkupMode    string              `json:"markup_mode" binding:"required"`
+	MarkupPercent flexibleDecimalText `json:"markup_percent"`
 }
 
 // UpdateProductMappingMarkup 更新单个映射的加价并立即重算本地售价
@@ -510,8 +511,8 @@ func (h *AdminHandler) UpdateProductMappingMarkup(c *gin.Context) {
 	}
 
 	percent := decimal.Zero
-	if req.MarkupPercent != "" {
-		parsed, err := decimal.NewFromString(req.MarkupPercent)
+	if raw := strings.TrimSpace(req.MarkupPercent.String()); raw != "" {
+		parsed, err := decimal.NewFromString(raw)
 		if err != nil {
 			ginutil.RespondError(c, response.CodeBadRequest, "error.invalid_markup_percent", err)
 			return

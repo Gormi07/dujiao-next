@@ -215,7 +215,8 @@ const handleSaveMarkup = async (mapping: AdminProductMapping & { product?: Admin
   try {
     await adminAPI.updateProductMappingMarkup(mapping.id, {
       markup_mode: markupForm.markup_mode,
-      markup_percent: markupForm.markup_mode === 'markup_percent' ? markupForm.markup_percent : '0',
+      // Input type=number 会把 v-model 变成 number；后端同时接受 string/number，这里统一成字符串更稳
+      markup_percent: markupForm.markup_mode === 'markup_percent' ? String(markupForm.markup_percent ?? '0') : '0',
     })
     notifySuccess(t('productMappings.detail.markupSaved'))
     const page = pagination.page
