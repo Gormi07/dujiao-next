@@ -133,18 +133,21 @@ const qrSrc = (u: string) => (u.startsWith('/uploads') ? getImageUrl(u) : u)
 .qsp-t-gray { background: #eceef2; color: #4b5563; }
 .qsp-toggle {
   display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 999px;
-  border: 1px solid #E53935; background: #E53935; color: #fff;
-  font-size: 13px; font-weight: 600; box-shadow: 0 10px 24px -14px rgba(229,57,53,.55); cursor: pointer;
-  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  border: 1px solid rgba(229,57,53,.35); background: #fff; color: #E53935;
+  font-size: 13px; font-weight: 600; box-shadow: 0 10px 24px -14px rgba(15,23,42,.45); cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
-.qsp-toggle:hover { background: #C62828; border-color: #C62828; color: #fff; }
-.qsp-toggle:active { background: #B71C1C; border-color: #B71C1C; color: #fff; }
-/* 暗色模式同样保持红底白字，不跟 --ui-bg / --ui-text 走 */
+.qsp-toggle:hover { background: #FFEBEE; border-color: #E53935; color: #C62828; }
+.qsp-toggle:active { background: #FFCDD2; border-color: #C62828; color: #B71C1C; }
+/* 暗色模式也保持白/浅底 + 红字，确保可读 */
 :root.dark .qsp-toggle, .dark .qsp-toggle, [data-theme="dark"] .qsp-toggle {
-  border-color: #E53935; background: #E53935; color: #fff;
+  border-color: rgba(229,57,53,.45); background: #fff; color: #E53935;
 }
 :root.dark .qsp-toggle:hover, .dark .qsp-toggle:hover, [data-theme="dark"] .qsp-toggle:hover {
-  background: #C62828; border-color: #C62828; color: #fff;
+  background: #FFEBEE; border-color: #E53935; color: #C62828;
+}
+:root.dark .qsp-toggle:active, .dark .qsp-toggle:active, [data-theme="dark"] .qsp-toggle:active {
+  background: #FFCDD2; border-color: #C62828; color: #B71C1C;
 }
 .qsp-pop-enter-active, .qsp-pop-leave-active { transition: opacity .18s ease, transform .18s ease; transform-origin: bottom right; }
 .qsp-pop-enter-from, .qsp-pop-leave-to { opacity: 0; transform: translateY(8px) scale(.97); }
