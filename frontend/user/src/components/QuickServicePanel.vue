@@ -133,10 +133,19 @@ const qrSrc = (u: string) => (u.startsWith('/uploads') ? getImageUrl(u) : u)
 .qsp-t-gray { background: #eceef2; color: #4b5563; }
 .qsp-toggle {
   display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 999px;
-  border: 1px solid var(--ui-border); background: var(--ui-bg-elevated); color: var(--ui-text-primary);
-  font-size: 13px; font-weight: 600; box-shadow: 0 10px 24px -14px rgba(15,23,42,.45); cursor: pointer;
+  border: 1px solid #E53935; background: #E53935; color: #fff;
+  font-size: 13px; font-weight: 600; box-shadow: 0 10px 24px -14px rgba(229,57,53,.55); cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
-.qsp-toggle:hover { color: var(--ui-accent); }
+.qsp-toggle:hover { background: #C62828; border-color: #C62828; color: #fff; }
+.qsp-toggle:active { background: #B71C1C; border-color: #B71C1C; color: #fff; }
+/* 暗色模式同样保持红底白字，不跟 --ui-bg / --ui-text 走 */
+:root.dark .qsp-toggle, .dark .qsp-toggle, [data-theme="dark"] .qsp-toggle {
+  border-color: #E53935; background: #E53935; color: #fff;
+}
+:root.dark .qsp-toggle:hover, .dark .qsp-toggle:hover, [data-theme="dark"] .qsp-toggle:hover {
+  background: #C62828; border-color: #C62828; color: #fff;
+}
 .qsp-pop-enter-active, .qsp-pop-leave-active { transition: opacity .18s ease, transform .18s ease; transform-origin: bottom right; }
 .qsp-pop-enter-from, .qsp-pop-leave-to { opacity: 0; transform: translateY(8px) scale(.97); }
 @media (max-width: 1023px) {
